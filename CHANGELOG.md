@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Adds `keccakHash` to the standard library, with the same signature as
-  `persistentHash`.  Adds `keccakHash` to the Compact runtime with the same
-  signature as `persistentHash`.  `keccakHash` requires the experimental feature
+- Adds `keccak256` to the standard library, with the same signature as
+  `persistentHash`.  Adds `keccak256` to the Compact runtime with the same
+  signature as `persistentHash`.  `keccak256` requires the experimental feature
   flag `--feature-zkir-v3` to work in an impure circuit (or called from an
   impure circuit).  It is a compiler error to use it in an impure circuit using
   the ZKIR v2 circuit backend.

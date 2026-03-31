@@ -287,12 +287,12 @@ circuit upgradeFromTransient(x: Field): Bytes<32>;
 
 ```
 
-### `keccakHash`
+### `keccak256`
 
 TODO: Describe me.
 
 ```compact
-circuit keccakHash<T>(value: T): Bytes<32>;
+circuit keccak256(value: T): Bytes<32>;
 ```
 
 ### `ecAdd`

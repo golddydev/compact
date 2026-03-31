@@ -31,7 +31,7 @@ Key parts of the API are:
   - [`persistentCommit`](exports.md#persistentcommit)
   - [`degradeToTransient`](exports.md#degradetotransient)
   - [`upgradeFromTransient`](exports.md#upgradefromtransient)
-  - [`keccakHash`](exports.md#keccakHash)
+  - [`keccak256`](exports.md#keccak256)
 - Elliptic curve functions:
   - [`ecAdd`](exports.md#ecadd)
   - [`ecMul`](exports.md#ecmul)

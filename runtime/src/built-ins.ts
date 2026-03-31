@@ -163,11 +163,11 @@ export function upgradeFromTransient(x: bigint): Uint8Array {
 }
 
 /**
- * The Compact builtin `keccakHash` function
+ * The Compact builtin `keccak256` function
  *
  * TODO: Describe me.
  */
-export function keccakHash<A>(rtType: CompactType<A>, value: A): Uint8Array {
+export function keccak256<A>(rtType: CompactType<A>, value: A): Uint8Array {
   // TODO: Implement me.
   return new Uint8Array(32);
 }
