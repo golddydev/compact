@@ -473,16 +473,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1773309020,
-        "narHash": "sha256-5RvXdcs2piO2f4LT3zEMQvgVcK6V/8bXYAmfsvvLB5w=",
+        "lastModified": 1775470035,
+        "narHash": "sha256-y6P1dkg5Ma0sfb9p2O7zt3cTsxyPPgrrW1euyeiM1sY=",
         "owner": "midnightntwrk",
         "repo": "midnight-ledger",
-        "rev": "dfb450d558d23100d056d2ba121fe2b865e1208c",
+        "rev": "1d3a52052fff7dbf6154bbce1fa4033444cec40b",
         "type": "github"
       },
       "original": {
         "owner": "midnightntwrk",
-        "ref": "ledger-8.0.2",
+        "ref": "iquerejeta/schnorr-compact",
         "repo": "midnight-ledger",
         "type": "github"
       }
