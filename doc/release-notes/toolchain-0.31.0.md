@@ -20,7 +20,6 @@ This release has workarounds for an issue where proofs would erroneously fail be
 - Operations in untaken branches are changed so that they cannot fail during proof construction
 - The language reference is now up to date with the current language version
 - `for` loop iteration bounds can now be generic parameters
-- The `fixup` tool now has a `--line-length` flag
 - The `contract-info.json` file now contains a description of the public ledger state
 
 ## Improvements
@@ -52,12 +51,6 @@ The [Compact language reference](https://docs.midnight.network/compact/reference
 ### Generic `for` loop iteration bounds
 
 Compact supports iteration over a range of natural numbers, using the syntax `for (const i of start..end)`, where `i` is a variable name and `start` (inclusive) and `end` (exclusive) are expressions giving the iteration bounds.  The compiler must be able to determine the values of the iteration bounds at compile time.  Previously, the bounds were not allowed to be generic parameters.  Now this is allowed.
-
-### `fixup --line-length`
-
-The `compact fixup` tool now supports a `--line-length` flag giving a column width for the fixed code.  Because fixes (e.g., renaming) can change the alignment of code, the `fixup` tool implicitly invokes the Compact formatter.  The formatter does support a `--line-length` flag, but it was not possible to tell the `fixup` tool the desired column width.
-
-This made `fixup` for non-default column widths awkward.  Users would run `fixup` and then have to run `format` themselves to get the desired column width.
 
 ### Ledger field layout in `contract-info.json`
 
