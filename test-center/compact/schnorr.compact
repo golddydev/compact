@@ -22,6 +22,6 @@ export circuit verifySchnorrN3(
   msg: Vector<3, Field>,
   sig: JubjubSchnorrSignature,
   pk: JubjubPoint
-): [] {
-  jubjubSchnorrVerify<3>(msg, sig, pk);
+): Boolean {
+  return jubjubSchnorrVerify<3>(msg, sig, pk);
 }

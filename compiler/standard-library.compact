@@ -367,19 +367,19 @@ struct JubjubSchnorrHashInput<#n> {
 }
 
 // Verify Schnorr signature over the native curve with a message of size #n.
-export circuit jubjubSchnorrVerify<#n>(msg: Vector<n, Field>, signature: JubjubSchnorrSignature, pk: JubjubPoint): [] {
+export circuit jubjubSchnorrVerify<#n>(msg: Vector<n, Field>, signature: JubjubSchnorrSignature, pk: JubjubPoint): Boolean {
   const {announcement, response} = signature;
-  const c_native: Field = transientHash<JubjubSchnorrHashInput<n>>(JubjubSchnorrHashInput<n>{
+  const cNative: Field = transientHash<JubjubSchnorrHashInput<n>>(JubjubSchnorrHashInput<n>{
     ann_x: jubjubPointX(announcement),
     ann_y: jubjubPointY(announcement),
     pk_x: jubjubPointX(pk),
     pk_y: jubjubPointY(pk),
     msg: msg
   });
-  const c: Field = jubjubScalarFromNative(c_native);
+  const c: Field = jubjubScalarFromNative(cNative);
 
   const lhs: JubjubPoint = ecMulGenerator(jubjubScalarFromNative(response));
   const rhs: JubjubPoint = ecAdd(announcement, ecMul(pk, c));
 
-  assert(lhs == rhs, "Invalid signature");
+  return lhs == rhs;
 }

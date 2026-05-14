@@ -18089,7 +18089,7 @@ groups than for single tests.
   (test ; jubjubSchnorrVerify with a simple message
     '(
       "import CompactStandardLibrary;"
-      "export circuit foo(msg: Vector<2, Field>, sig: JubjubSchnorrSignature, vk: JubjubPoint): [] {"
+      "export circuit foo(msg: Vector<2, Field>, sig: JubjubSchnorrSignature, vk: JubjubPoint): Boolean {"
       "  return jubjubSchnorrVerify<2>(msg, sig, vk);"
       "}"
       )

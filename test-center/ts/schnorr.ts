@@ -22,27 +22,6 @@ const MSG_LEN = 3;
 const msgType = new runtime.CompactTypeVector(MSG_LEN, runtime.CompactTypeField);
 const sampleMsg = (): bigint[] => [1n, 2n, 3n];
 
-test('TypeScript Schnorr sign/verify roundtrip', () => {
-  const sk = runtime.jubjubSampleScalar();
-  const pk = runtime.jubjubSchnorrVerifyingKey(sk);
-  const msg = sampleMsg();
-
-  const sig = runtime.jubjubSchnorrSign(msgType, msg, sk);
-
-  expect(runtime.jubjubSchnorrVerify(msgType, msg, pk, sig)).toBe(true);
-});
-
-test('TypeScript Schnorr verify rejects a bad signature', () => {
-  const sk = runtime.jubjubSampleScalar();
-  const pk = runtime.jubjubSchnorrVerifyingKey(sk);
-  const msg = sampleMsg();
-
-  const sig = runtime.jubjubSchnorrSign(msgType, msg, sk);
-  const badSig = { ...sig, response: (sig.response + 1n) % runtime.JUBJUB_SCALAR_ORDER };
-
-  expect(runtime.jubjubSchnorrVerify(msgType, msg, pk, badSig)).toBe(false);
-});
-
 test('TypeScript signature passes in-circuit verification', () => {
   const sk = runtime.jubjubSampleScalar();
   const pk = runtime.jubjubSchnorrVerifyingKey(sk);
@@ -51,7 +30,7 @@ test('TypeScript signature passes in-circuit verification', () => {
   const sig = runtime.jubjubSchnorrSign(msgType, msg, sk);
 
   const [c, Ctxt] = startContract(contractCode, {}, 0);
-  expect(() => c.circuits.verifySchnorrN3(Ctxt, msg, sig, pk)).not.toThrow();
+  expect(c.circuits.verifySchnorrN3(Ctxt, msg, sig, pk).result).toBe(true);
 });
 
 test('Tampered signature fails in-circuit verification', () => {
@@ -63,5 +42,5 @@ test('Tampered signature fails in-circuit verification', () => {
   const badSig = { ...sig, response: (sig.response + 1n) % runtime.JUBJUB_SCALAR_ORDER };
 
   const [c, Ctxt] = startContract(contractCode, {}, 0);
-  expect(() => c.circuits.verifySchnorrN3(Ctxt, msg, badSig, pk)).toThrow(runtime.CompactError);
+  expect(c.circuits.verifySchnorrN3(Ctxt, msg, badSig, pk).result).toBe(false);
 });

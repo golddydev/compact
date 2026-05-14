@@ -263,6 +263,11 @@ export function jubjubSampleScalar(): bigint {
 }
 
 /**
+ * Alias for {@link jubjubSampleScalar}. Samples a random JubJub Schnorr signing key.
+ */
+export const sampleJubjubSchnorrSk = jubjubSampleScalar;
+
+/**
  * Converts a native field element to a JubJub scalar by reducing modulo the scalar field order.
  */
 export function jubjubScalarFromNative(x: bigint): bigint {
@@ -281,10 +286,10 @@ export function reduceModJubjubOrder(value: bigint): bigint {
 /**
  * Derives the Schnorr verifying key (public key) from a signing key.
  *
- * Equivalent to {@link ecMulGenerator}(sk).
+ * Equivalent to {@link ecMulGenerator}(signingKey).
  */
-export function jubjubSchnorrVerifyingKey(sk: bigint): JubjubPoint {
-  return ecMulGenerator(sk);
+export function jubjubSchnorrVerifyingKey(signingKey: bigint): JubjubPoint {
+  return ecMulGenerator(signingKey);
 }
 
 /**
@@ -299,10 +304,10 @@ export function jubjubSchnorrVerifyingKey(sk: bigint): JubjubPoint {
  * - Challenge `c = PoseidonHash(R.x, R.y, pk.x, pk.y, msg...)`
  * - Response `s = r + c·sk` (in the JubJub scalar field)
  */
-export function jubjubSchnorrSign<A>(rtType: CompactType<A>, msg: A, sk: bigint): JubjubSchnorrSignature {
+export function jubjubSchnorrSign<A>(rtType: CompactType<A>, msg: A, signingKey: bigint): JubjubSchnorrSignature {
   const r = jubjubSampleScalar();
   const announcement = ecMulGenerator(r);
-  const pk = ecMulGenerator(sk);
+  const verifyingKey = ecMulGenerator(signingKey);
 
   const challengeAlignment: ocrt.Alignment = [
     ...CompactTypeJubjubPoint.alignment(),
@@ -311,12 +316,12 @@ export function jubjubSchnorrSign<A>(rtType: CompactType<A>, msg: A, sk: bigint)
   ];
   const challengeValue: ocrt.Value = [
     ...CompactTypeJubjubPoint.toValue(announcement),
-    ...CompactTypeJubjubPoint.toValue(pk),
+    ...CompactTypeJubjubPoint.toValue(verifyingKey),
     ...rtType.toValue(msg),
   ];
   const c = reduceModJubjubOrder(ocrt.valueToBigInt(ocrt.transientHash(challengeAlignment, challengeValue)));
 
-  const response = reduceModJubjubOrder(r + c * sk);
+  const response = reduceModJubjubOrder(r + c * signingKey);
   return { announcement, response };
 }
 
@@ -329,7 +334,7 @@ export function jubjubSchnorrSign<A>(rtType: CompactType<A>, msg: A, sk: bigint)
  *
  * Returns `true` if the signature is valid (i.e. `s·G == R + c·pk`).
  */
-export function jubjubSchnorrVerify<A>(rtType: CompactType<A>, msg: A, pk: JubjubPoint, sig: JubjubSchnorrSignature): boolean {
+export function jubjubSchnorrVerify<A>(rtType: CompactType<A>, msg: A, verifyingKey: JubjubPoint, sig: JubjubSchnorrSignature): boolean {
   const { announcement, response } = sig;
 
   const challengeAlignment: ocrt.Alignment = [
@@ -339,13 +344,13 @@ export function jubjubSchnorrVerify<A>(rtType: CompactType<A>, msg: A, pk: Jubju
   ];
   const challengeValue: ocrt.Value = [
     ...CompactTypeJubjubPoint.toValue(announcement),
-    ...CompactTypeJubjubPoint.toValue(pk),
+    ...CompactTypeJubjubPoint.toValue(verifyingKey),
     ...rtType.toValue(msg),
   ];
   const c = reduceModJubjubOrder(ocrt.valueToBigInt(ocrt.transientHash(challengeAlignment, challengeValue)));
 
   const lhs = ecMulGenerator(response);
-  const rhs = ecAdd(announcement, ecMul(pk, c));
+  const rhs = ecAdd(announcement, ecMul(verifyingKey, c));
 
   return lhs.x === rhs.x && lhs.y === rhs.y;
 }
