@@ -93,7 +93,7 @@
   (TypeRef JubjubPoint))
 
 (declare-native-entry circuit jubjubScalarFromNative
-  "__compactRuntime.jubjubScalarFromNative"
+  "__compactRuntime.reduceModJubjubOrder"
   ([x Field (discloses "a JubJub scalar equivalent to")])
   Field)
 

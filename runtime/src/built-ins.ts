@@ -268,13 +268,6 @@ export function jubjubSampleScalar(): bigint {
 export const sampleJubjubSchnorrSk = jubjubSampleScalar;
 
 /**
- * Converts a native field element to a JubJub scalar by reducing modulo the scalar field order.
- */
-export function jubjubScalarFromNative(x: bigint): bigint {
-  return ocrt.valueToBigInt(ocrt.jubjubScalarFromNative(ocrt.bigIntToValue(x)));
-}
-
-/**
  * Reduce modulo the JubJub scalar field order.
  *
  * The returned value is in the range [0, JUBJUB_SCALAR_ORDER).
