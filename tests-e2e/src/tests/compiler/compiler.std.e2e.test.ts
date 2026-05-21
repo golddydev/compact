@@ -26,6 +26,7 @@ import {
     buildPathTo,
 } from '@';
 import path from 'node:path';
+import fs from 'fs/promises';
 
 describe('[Std] Compiler', () => {
     const CONTRACTS_ROOT = buildPathTo('/std_lib/import');
@@ -83,6 +84,9 @@ describe('[Std] Compiler', () => {
     test(`should be able to compile contract with keccak256 hash function: keccak256.compact with only feature v3 enabled`, async () => {
         const CONTRACTS_ROOT = buildPathTo('/std_lib');
         const filePath = path.join(CONTRACTS_ROOT, 'keccak256.compact');
+
+        // clear contractsDir before compiling
+        await fs.rm(contractsDir, { recursive: true, force: true });
 
         const v2Result: Result = await compile([Arguments.SKIP_ZK, filePath, contractsDir], CONTRACTS_ROOT);
         expectCompilerResult(v2Result).toBeFailure(
