@@ -59473,6 +59473,31 @@ groups than for single tests.
     '(
       "import CompactStandardLibrary;"
       ""
+      "export ledger hash: Bytes<32>;"
+      ""
+      "export circuit foo(msg: Opaque<'string'>): [] {"
+      "  hash = disclose(keccak256<Opaque<'string'>>(msg));"
+      "}"
+      )
+    (output-file "compiler/testdir/zkir/foo.zkir"
+      '(
+        "{"
+        "  \"version\": { \"major\": 3, \"minor\": 0 },"
+        "  \"do_communications_commitment\": false,"
+        "  \"inputs\": ["
+        "    { \"name\": \"%msg.0\", \"type\": \"Scalar<BLS12-381>\" }"
+        "  ],"
+        "  \"instructions\": ["
+        "    { \"op\": \"keccak256\", \"outputs\": [\"%tmp.1\", \"%tmp.2\"], \"alignment\": [{ \"tag\": \"atom\", \"value\": { \"tag\": \"compress\" } }], \"inputs\": [\"%msg.0\"] },"
+        "    { \"op\": \"impact\", \"guard\": \"0x01\", \"inputs\": [\"0x10\", \"0x01\", \"0x01\", \"0x01\", \"0x00\", \"0x11\", \"0x01\", \"0x01\", \"0x20\", \"%tmp.1\", \"%tmp.2\", \"0x91\"] }"
+        "  ]"
+        "}"))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      ""
       "ledger forceField: Field; circuit forceProof(): [] { forceField = 7; }"
       ""
       "export circuit foo(a : Uint<0..1>): Boolean { forceProof(); return a != 0; }"
