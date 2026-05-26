@@ -171,7 +171,7 @@ groups than for single tests.
 
   (define (print-pass-result pass-name pretty-formats result)
     (pretty-print/formats
-      (cons 
+      (cons
         (cons 'pass-returns '(pass-returns pass-name #f e))
         pretty-formats)
       (list 'pass-returns pass-name result)))
@@ -391,7 +391,7 @@ groups than for single tests.
                                      sfn
                                      (and maybe-src (format-source-object maybe-src))))
                   (unless (and (list? code) (andmap string? code))
-                    (internal-errorf #f "supplied code is not a list of strings~@[ at ~a~]" 
+                    (internal-errorf #f "supplied code is not a list of strings~@[ at ~a~]"
                                      (and maybe-src (format-source-object maybe-src))))
                   (mkdir-p (path-parent sfn))
                   (with-output-to-file sfn
@@ -13460,6 +13460,37 @@ groups than for single tests.
 
   (test
     '(
+      "module M1 {"
+      "  import CompactStandardLibrary;"
+      "  export circuit foo1(x: Field): Bytes<32> {"
+      "    return keccak256<Field>(x);"
+      "  }"
+      "}"
+      "module M2 {"
+      "  import CompactStandardLibrary;"
+      "  export circuit foo2(x: Field): Bytes<32> {"
+      "    return keccak256<Field>(x);"
+      "  }"
+      "}"
+      "import M1;"
+      "import M2;"
+      "export { foo1, foo2 };"
+      )
+    (returns
+      (program ((foo1 %foo1.0) (foo2 %foo2.1))
+        (public-ledger-declaration %kernel.2 (Kernel))
+        (native %keccak256.3 ([%value.4 (tfield)])
+             (tbytes 32))
+        (circuit %foo1.0 ([%x.5 (tfield)])
+             (tbytes 32)
+          (call (fref ((%keccak256.3))) %x.5))
+        (circuit %foo2.1 ([%x.6 (tfield)])
+             (tbytes 32)
+          (call (fref ((%keccak256.3))) %x.6))))
+    )
+
+  (test
+    '(
       "import CompactStandardLibrary;"
       "export circuit CompactStandardLibrary(x: Field): Bytes<32> {"
       " return persistentHash<Field>(x);"
@@ -18027,6 +18058,37 @@ groups than for single tests.
     (oops
       message: "~a:\n  ~?"
       irritants: '("testfile.compact line 2 char 38" "no compatible function named ~a is in scope at this call~@[~a~]~@[~a~]~@[~a~]" (persistentHash #f "\n    one function is incompatible with the supplied argument types\n      supplied argument types:\n        (Uint<0..43>)\n      declared argument types for function at <standard library>:\n        (Bytes<32>)" #f)))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+
+      "export { keccak256 };"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 2 char 10" "cannot export ~s (~s) from the top level" (native keccak256)))
+    )
+
+  (test
+    '(
+      "import {keccak256} from CompactStandardLibrary;"
+      "export circuit foo(): Bytes<32> { return keccak256<1>([3]); }"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 2 char 42" "no compatible function named ~a is in scope at this call~@[~a~]~@[~a~]~@[~a~]" (keccak256 "\n    one function is incompatible with the supplied generic values\n      supplied generic values:\n        <size 1>\n      declared generics for function at <standard library>:\n        <type>" #f #f)))
+    )
+
+  (test
+    '(
+      "import {keccak256} from CompactStandardLibrary;"
+      "export circuit foo(): Field { return keccak256<Bytes<32>>(42); }"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 2 char 38" "no compatible function named ~a is in scope at this call~@[~a~]~@[~a~]~@[~a~]" (keccak256 #f "\n    one function is incompatible with the supplied argument types\n      supplied argument types:\n        (Uint<0..43>)\n      declared argument types for function at <standard library>:\n        (Bytes<32>)" #f)))
     )
 
   (test
@@ -31066,7 +31128,7 @@ groups than for single tests.
                       [%n.5 (tunsigned 65535)])
                  (tunsigned 4294967295)
               (downcast-unsigned
-                4295032830 
+                4295032830
                 4294967295
                 (+ 33
                    (safe-cast (tunsigned 4295032830) (tunsigned 4294967295) %a.4)
@@ -59302,6 +59364,20 @@ groups than for single tests.
         "  ]"
         "}"))
     )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "ledger wantZkir: Boolean;"
+      "export circuit foo(v: Vector<4, Uint<8>>): Bytes<32> {"
+      "  wantZkir = true;"
+      "  return keccak256<Vector<4, Uint<8>>>(v);"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 5 char 10" "keccak256 is not supported in ZKIR v2: try recompiling with the flag `--feature-zkir-v3`" ()))
+    )
   )
 
 (parameterize ([feature-zkir-v3 #t])
@@ -60036,7 +60112,7 @@ groups than for single tests.
         "    { \"op\": \"add\", \"output\": \"%t.2\", \"a\": \"%n.0\", \"b\": \"%neg.1\" },"
         "    { \"op\": \"output\", \"val\": \"%t.2\" }"
         "  ]"
-        "}"))    
+        "}"))
     )
 
   (test
@@ -67661,7 +67737,7 @@ groups than for single tests.
         "  expect(C.circuits.foo(Ctxt).result).toEqual([]);"
         "});"
         ))
-    ) 
+    )
   )
 
  (with-compact-path '(".")
