@@ -67719,6 +67719,13 @@ groups than for single tests.
         "  expect(C.circuits.doKeccak256(Ctxt, '').result).toEqual(keccak_256(utf8.encode('')));"
         "  expect(C.circuits.doKeccak256(Ctxt, 'abc').result).toEqual(keccak_256(utf8.encode('abc')));"
         "  });"
+        "test('keccak256 of an Opaque string matches known digests', () => {"
+        "  const fromHex = (h) => Uint8Array.from(h.match(/../g).map((b) => parseInt(b, 16)));"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  expect(C.circuits.doKeccak256(Ctxt, '').result).toEqual(fromHex('c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470'));"
+        "  expect(C.circuits.doKeccak256(Ctxt, 'abc').result).toEqual(fromHex('4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45'));"
+        "  expect(C.circuits.doKeccak256(Ctxt, 'hello-world').result).toEqual(fromHex('d41bad2284cfa351467b5db9418bbe3a5c02162c02ee585f07e5553d823ebad9'));"
+        "  });"
         ))
     )
 
