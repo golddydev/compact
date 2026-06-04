@@ -67729,6 +67729,64 @@ groups than for single tests.
         ))
     )
 
+  ; keccak256 of non-opaque inputs (Field, Bytes<N>, Vector, a custom struct,
+  ; and a custom union) must digest to Bytes<32>, be deterministic, and map
+  ; distinct values to distinct digests
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "struct Point { x: Field, y: Bytes<4> }"
+      "enum Shape { circle, square, triangle }"
+      "export circuit hashField(x: Field): Bytes<32> {"
+      "  return keccak256<Field>(x);"
+      "}"
+      "export circuit hashBytes(x: Bytes<4>): Bytes<32> {"
+      "  return keccak256<Bytes<4>>(x);"
+      "}"
+      "export circuit hashVector(v: Vector<3, Field>): Bytes<32> {"
+      "  return keccak256<Vector<3, Field>>(v);"
+      "}"
+      "export circuit hashStruct(p: Point): Bytes<32> {"
+      "  return keccak256<Point>(p);"
+      "}"
+      "export circuit hashUnion(s: Shape): Bytes<32> {"
+      "  return keccak256<Shape>(s);"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('keccak256 of non-opaque inputs digests to Bytes<32>', () => {"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  for (const digest of ["
+        "    C.circuits.hashField(Ctxt, 5n).result,"
+        "    C.circuits.hashBytes(Ctxt, new Uint8Array([1, 2, 3, 4])).result,"
+        "    C.circuits.hashVector(Ctxt, [1n, 2n, 3n]).result,"
+        "    C.circuits.hashStruct(Ctxt, {x: 5n, y: new Uint8Array([1, 2, 3, 4])}).result,"
+        "    C.circuits.hashUnion(Ctxt, 0).result,"
+        "  ]) {"
+        "    expect(digest).toBeInstanceOf(Uint8Array);"
+        "    expect(digest.length).toEqual(32);"
+        "  }"
+        "});"
+        "test('keccak256 is deterministic: equal inputs produce equal digests', () => {"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  expect(C.circuits.hashField(Ctxt, 5n).result).toEqual(C.circuits.hashField(Ctxt, 5n).result);"
+        "  expect(C.circuits.hashBytes(Ctxt, new Uint8Array([1, 2, 3, 4])).result).toEqual(C.circuits.hashBytes(Ctxt, new Uint8Array([1, 2, 3, 4])).result);"
+        "  expect(C.circuits.hashVector(Ctxt, [1n, 2n, 3n]).result).toEqual(C.circuits.hashVector(Ctxt, [1n, 2n, 3n]).result);"
+        "  expect(C.circuits.hashStruct(Ctxt, {x: 5n, y: new Uint8Array([1, 2, 3, 4])}).result).toEqual(C.circuits.hashStruct(Ctxt, {x: 5n, y: new Uint8Array([1, 2, 3, 4])}).result);"
+        "  expect(C.circuits.hashUnion(Ctxt, 1).result).toEqual(C.circuits.hashUnion(Ctxt, 1).result);"
+        "});"
+        "test('keccak256 maps distinct inputs to distinct digests', () => {"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  expect(C.circuits.hashField(Ctxt, 5n).result).not.toEqual(C.circuits.hashField(Ctxt, 6n).result);"
+        "  expect(C.circuits.hashBytes(Ctxt, new Uint8Array([1, 2, 3, 4])).result).not.toEqual(C.circuits.hashBytes(Ctxt, new Uint8Array([1, 2, 3, 5])).result);"
+        "  expect(C.circuits.hashVector(Ctxt, [1n, 2n, 3n]).result).not.toEqual(C.circuits.hashVector(Ctxt, [1n, 2n, 4n]).result);"
+        "  expect(C.circuits.hashStruct(Ctxt, {x: 5n, y: new Uint8Array([1, 2, 3, 4])}).result).not.toEqual(C.circuits.hashStruct(Ctxt, {x: 6n, y: new Uint8Array([1, 2, 3, 4])}).result);"
+        "  expect(C.circuits.hashUnion(Ctxt, 0).result).not.toEqual(C.circuits.hashUnion(Ctxt, 2).result);"
+        "});"
+        ))
+    )
+
   (test
     '(
       "circuit foo(n: Field): Boolean {"
