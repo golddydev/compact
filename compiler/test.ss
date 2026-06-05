@@ -67792,6 +67792,54 @@ groups than for single tests.
         ))
     )
 
+  ; keccak256 has raw-byte semantics: it hashes the concatenated field-aligned
+  ; chunks and ignores alignment/type structure. So a Bytes<12> and a struct of
+  ; three Bytes<4> fields produce the SAME digest when they flatten to the same
+  ; bytes -- but Bytes.toValue strips trailing zeros per chunk, so a zero byte at
+  ; a field boundary is kept in the contiguous Bytes<12> yet stripped in the
+  ; struct, making the flattened bytes (and digests) diverge.
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "struct Triple { a: Bytes<4>, b: Bytes<4>, c: Bytes<4> }"
+      "export circuit hashBytes12(x: Bytes<12>): Bytes<32> {"
+      "  return keccak256<Bytes<12>>(x);"
+      "}"
+      "export circuit hashTriple(t: Triple): Bytes<32> {"
+      "  return keccak256<Triple>(t);"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('keccak256 raw-byte semantics: matching flattened bytes agree across types', async () => {"
+        "  const { keccak_256 } = await import('@noble/hashes/sha3.js');"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  // No zero at an interior field boundary: Bytes<12> and the 3x Bytes<4>"
+        "  // struct both flatten to the same 12 bytes, so the digests agree (and"
+        "  // match a raw keccak_256 over those bytes)."
+        "  const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);"
+        "  const triple = {a: new Uint8Array([1, 2, 3, 4]), b: new Uint8Array([5, 6, 7, 8]), c: new Uint8Array([9, 10, 11, 12])};"
+        "  const d12 = C.circuits.hashBytes12(Ctxt, bytes).result;"
+        "  expect(d12).toEqual(C.circuits.hashTriple(Ctxt, triple).result);"
+        "  expect(d12).toEqual(keccak_256(bytes));"
+        "});"
+        "test('keccak256 raw-byte semantics: a zero at a field boundary diverges', async () => {"
+        "  const { keccak_256 } = await import('@noble/hashes/sha3.js');"
+        "  const [C, Ctxt] = startContract(contractCode, {}, 0);"
+        "  // Byte index 3 is zero. In the contiguous Bytes<12> it is an interior"
+        "  // byte and is kept; in the struct it is field `a`'s trailing byte and is"
+        "  // stripped by Bytes.toValue, so the two flatten to different byte streams."
+        "  const bytes = new Uint8Array([1, 2, 3, 0, 5, 6, 7, 8, 9, 10, 11, 12]);"
+        "  const triple = {a: new Uint8Array([1, 2, 3, 0]), b: new Uint8Array([5, 6, 7, 8]), c: new Uint8Array([9, 10, 11, 12])};"
+        "  const d12 = C.circuits.hashBytes12(Ctxt, bytes).result;"
+        "  const dTriple = C.circuits.hashTriple(Ctxt, triple).result;"
+        "  expect(d12).not.toEqual(dTriple);"
+        "  expect(d12).toEqual(keccak_256(bytes)); // interior zero kept -> 12 bytes"
+        "  expect(dTriple).toEqual(keccak_256(new Uint8Array([1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]))); // field-trailing zero stripped -> 11 bytes"
+        "});"
+        ))
+    )
+
   (test
     '(
       "circuit foo(n: Field): Boolean {"
