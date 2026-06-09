@@ -66639,30 +66639,168 @@ groups than for single tests.
 (with-parameter-values ([feature-zkir-v3 #f #t])
 (run-tests save-manifest
   (test-group
-    ((create-file "C.compact"
+    ((create-file "C1interface.compact"
        '(
+         "module C1interface {"
+         "  import CompactStandardLibrary;"
+         "  export contract C1 {"
+         "    circuit foo(x: Bytes<32>): [];"
+         "    pure circuit barr(): Bytes<32>;"
+         "  }"
+         "}"
+         )))
+    ((create-file "C1.compact"
+       '(
+         "import {C1} from C1interface;"
+         ; "contract implements C1;"
          "export circuit foo(x: Bytes<32>): [] { return; }"
          ))
+     ; WARNING: Do not replace this wholesale...maintain the structure of the first several
+     ; lines to avoid hard-coding specific version strings into the test
+     (output-file "compiler/testdir/C1/compiler/contract-info.json"
+       `(
+         "{"
+         ,(format "  \"compiler-version\": \"~a\"," compiler-version-string)
+         ,(format "  \"language-version\": \"~a\"," language-version-string)
+         ,(format "  \"runtime-version\": \"~a\"," runtime-version-string)
+         "  \"circuits\": ["
+         "    {"
+         "      \"name\": \"foo\","
+         "      \"pure\": true,"
+         "      \"proof\": false,"
+         "      \"arguments\": ["
+         "        {"
+         "          \"name\": \"x\","
+         "          \"type\": {"
+         "            \"type-name\": \"Bytes\","
+         "            \"length\": 32"
+         "          }"
+         "        }"
+         "      ],"
+         "      \"result-type\": {"
+         "        \"type-name\": \"Tuple\","
+         "        \"types\": ["
+         "        ]"
+         "      }"
+         "    }"
+         "  ],"
+         "  \"witnesses\": ["
+         "  ],"
+         "  \"contracts\": ["
+         "  ],"
+         "  \"ledger\": ["
+         "  ]"
+         "}"))
      ; each contract needs a stage-javascript form with a different contractCode name
      ; the contractCode name is otherwise optional and defaults to contractCode
      ; the list of test-code lines can be empty, in which case the stage-javascript form is
      ; effectively the same as a (succeeds) form
-     (stage-javascript C '()))
-    ((create-file "testfile.compact"
+     (stage-javascript C1 '()))
+    ((create-file "C2.compact"
        '(
          "import CompactStandardLibrary;"
-         "contract C {"
-         "  circuit foo(x: Bytes<32>): [];"
-         "  pure circuit barr(): Bytes<32>;"
-         "}"
-         "export circuit hello(c: C): [] { return disclose(c).foo(disclose(c).barr()); }"
+         "import {C1} from C1interface;"
+         "export circuit hello(c: C1): [] { return disclose(c).foo(disclose(c).barr()); }"
          ))
-    (stage-javascript
-      '(
-        "test('check 1', async () => {"
-        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
-        "  });"
-        ))
+     ; WARNING: Do not replace this wholesale...maintain the structure of the first several
+     ; lines to avoid hard-coding specific version strings into the test
+     (output-file "compiler/testdir/C2/compiler/contract-info.json"
+       `(
+         "{"
+         ,(format "  \"compiler-version\": \"~a\"," compiler-version-string)
+         ,(format "  \"language-version\": \"~a\"," language-version-string)
+         ,(format "  \"runtime-version\": \"~a\"," runtime-version-string)
+         "  \"circuits\": ["
+         "    {"
+         "      \"name\": \"hello\","
+         "      \"pure\": false,"
+         "      \"proof\": false,"
+         "      \"arguments\": ["
+         "        {"
+         "          \"name\": \"c\","
+         "          \"type\": {"
+         "            \"type-name\": \"Contract\","
+         "            \"name\": \"C1\","
+         "            \"circuits\": ["
+         "              {"
+         "                \"name\": \"foo\","
+         "                \"pure\": false,"
+         "                \"argument-types\": ["
+         "                  {"
+         "                    \"type-name\": \"Bytes\","
+         "                    \"length\": 32"
+         "                  }"
+         "                ],"
+         "                \"result-type\": {"
+         "                  \"type-name\": \"Tuple\","
+         "                  \"types\": ["
+         "                  ]"
+         "                }"
+         "              },"
+         "              {"
+         "                \"name\": \"barr\","
+         "                \"pure\": true,"
+         "                \"argument-types\": ["
+         "                ],"
+         "                \"result-type\": {"
+         "                  \"type-name\": \"Bytes\","
+         "                  \"length\": 32"
+         "                }"
+         "              }"
+         "            ]"
+         "          }"
+         "        }"
+         "      ],"
+         "      \"result-type\": {"
+         "        \"type-name\": \"Tuple\","
+         "        \"types\": ["
+         "        ]"
+         "      }"
+         "    }"
+         "  ],"
+         "  \"witnesses\": ["
+         "  ],"
+         "  \"contracts\": ["
+         "    {"
+         "      \"name\": \"C1\","
+         "      \"circuits\": ["
+         "        {"
+         "          \"name\": \"foo\","
+         "          \"pure\": false,"
+         "          \"argument-types\": ["
+         "            {"
+         "              \"type-name\": \"Bytes\","
+         "              \"length\": 32"
+         "            }"
+         "          ],"
+         "          \"result-type\": {"
+         "            \"type-name\": \"Tuple\","
+         "            \"types\": ["
+         "            ]"
+         "          }"
+         "        },"
+         "        {"
+         "          \"name\": \"barr\","
+         "          \"pure\": true,"
+         "          \"argument-types\": ["
+         "          ],"
+         "          \"result-type\": {"
+         "            \"type-name\": \"Bytes\","
+         "            \"length\": 32"
+         "          }"
+         "        }"
+         "      ]"
+         "    }"
+         "  ],"
+         "  \"ledger\": ["
+         "  ]"
+         "}"))
+     (stage-javascript
+       '(
+         "test('check 1', async () => {"
+         "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+         "  });"
+         ))
      ))
 
   (test-group ; test of stage-javascript's handling of multiple contracts
