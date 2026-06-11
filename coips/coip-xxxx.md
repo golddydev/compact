@@ -144,8 +144,9 @@ _circuit-declaration_ is defined to require a "simple" parameter
 list, because the circuits in contract interfaces are not allowed to 
 have generic parameters.
 
-When some subset of a contract's circuits matches those declared in
-some interface, the contract is said to **implement** that interface.
+When some subset of a contract's circuits matches the set of those
+declared in an interface, the contract is said to **implement** that
+interface.
 
 More precisely, define the **signature** of a circuit to be the types
 of its parameters, plus its return type.  Changing the parameter names
@@ -154,9 +155,8 @@ change its signature, because the signature is defined only by the
 parameter and return *types*.  The circuit declarations in an
 interface also have signatures defined by their types.  For example,
 the signature of `addTo` in the `Adder` interface above is
-```
-  Uint<64> -> Uint<64>
-```
+
+> `Uint<64>` &rarr; `Uint<64>`
 
 One circuit signature *S* is a **subtype** of another *T* when
 1. *S* and *T* have the same number of parameter types.
@@ -256,7 +256,7 @@ No mechanism is provided by this proposal to *create* values with
 contract types.  Instead, the surrounding context (that is, the
 application code) introduces a contract reference by calling a circuit
 or constructor with the address of a deployed contract or by returning
-a the address of a deployed contract from a witness function.
+the address of a deployed contract from a witness function.
 
 Because a contract reference is implemented by a contract address,
 whose value comes from outside the safe realm of Compact's type
@@ -272,7 +272,7 @@ their values.
 
 ### Cross-Contract Calls
 
-The main use for holding a reference to a contract with a known
+The main use for holding a reference to a contract value with a known
 interface is to call the circuits named in that interface.  Here is an
 example of a circuit calling one of the `Adder` interface's circuits.
 
@@ -329,12 +329,35 @@ these limitations.
 Explain the design decisions that were made and the reasons behind them.
 -->
 
+The design of the proposed interface and call syntax is driven by a
+desire to remain consistent with the style of existing syntax.
+Aspects of the rationale for the semantics and current limitations
+are discussed in the Motivation, Specification, and Rejected Ideas
+sections.
+
+Overall, the goal has been to provide extensions to Compact that are
+natural and consistent to programmers, while meeting the needs of
+major multi-contract use cases.  This goal has been balanced against a
+desire for this initial support for cross-contract calls to be
+relatively easy to implement.
+
 ## Backwards Compatibility
 
 <!--
 Describe how the proposed solution affects existing systems, applications, and
 users.  Is it a breaking change?
 -->
+
+This proposal introduces new uses for the keywords `interface`,
+`contract`, and `implements`.  All of these were already reserved
+keywords in Compact.  The grammar production for interfaces replaces
+the existing one that used the keyword `contract`, but the contract
+type declaration form was not previously specified to have any
+meaning.
+
+Thus, this is not a breaking change.  No working Compact programs
+should stop working or have different behavior because of the changes
+proposed here.
 
 ## Security Implications
 
@@ -344,12 +367,61 @@ any new attack vectors or vulnerabilities introduced?  How will they be
 mitigated.
 -->
 
+The major security implications of this proposal are related to its
+limitations.  The Compact compiler produces JavaScript code for each
+circuit in a contract, and when a TypeScript or JavaScript application
+is written to use the contract, it "calls a circuit" by running the
+generated JavaScript code.  The execution of the generated code yields
+transcripts about which ZK proofs can be generated, enabling the
+circuit's execution to be posted to the blockchain.
+
+An end user of such an application must trust the application code
+enough to let it run in the user's web browser or local JavaScript
+environment.  There is no inherent guarantee, though, that the
+JavaScript circuit code provided by the application is exactly what
+was produced by the Compact compiler.  It could be modified in a
+harmful way.  (The way the code updates the blockchain's ledger state
+cannot be changed, because the proofs about such updates rely on
+cryptographic evidence already associated with the circuit as part of
+the contract's deployment.)
+
+The risks of this execution model are not changed by this proposal,
+but they are amplified, in the following sense.  When an application
+provides code for contract `C`, which calls a circuit of interface
+`T`, the application must also provide code for a contract that
+implements `T`.  The generated code for `C` assumes that the contract
+implementing `T` was produced by compiling `T.compact`.  Because the
+code is all executed in the same context (for example, the same web
+browser page/session), the code that the application delivers for `T`
+has access to all the private state associated with `C`.
+
+The current proposal mitigates the risk of private state leakage
+across contracts by disallowing any contract with witness functions
+from implementing an interface.  A called circuit, *as expressed in
+Compact*, thus has no means of interrogating private state.  The code
+that an application actually delivers to implement the contract,
+however, can see all of the private state.
+
+In other words, until some later Compact Improvement Proposal
+introduces a way to limit the sharing of private state to specific
+contracts, the scope of trust for the private state associated with a
+contract is a whole application using that contract.  This proposal
+provides no notion of limited access to private state.
+
 ## How to Teach This
 
 <!--
 Explain how to teach users, including both new and experienced ones, how to use
 the CoIP in their own work.
 -->
+
+The approach to enabling the creation of multi-contract systems that
+is described in this proposal should be fairly intuitive and easily
+explained with a few examples.  Treating contract interface types as
+another kind of program-defined type, like structure types and
+enumeration types, means that programmers can rely on many of the
+intuitions they have developed about those existing program-defined
+types.
 
 ## Implementation
 
@@ -362,12 +434,116 @@ Provide a link to a reference implementation, if there is one, and describe any
 limitations.
 -->
 
+The required changes to the Compact grammar have already been
+described in the Specification section.  Any implementation must also
+extend its type-checking system to handle the new contract interface
+types and their subtype relationships.
+
+The implementation of a cross-contract call can generate JavaScript
+code that imports all the needed callee definitions from files with
+names derived from the name of the callee's interface.  At a minimum,
+an implementation can assume that the compiler outputs for the callee
+interface are in the same location as those of the caller.  A more
+sophisticated implementation might support some kind of search path
+for such imports.
+
+<!-- Do we need a note about placement of dynamic checks? -->
+
 ## Rejected Ideas
 
 <!--
 Describe other ideas that were considered and explain why they were ultimately
 not adopted.
 -->
+
+Prior to this proposal, several alternate possibilities were
+considered for extending Compact to support multi-contract systems.
+
+### Multiple Contracts in the Same File
+
+Some initial ideas focused on *static* composition of multi-contract
+systems, where all the code for the multiple contracts is compiled
+together.  To support this multi-contract coding style, it was
+proposed that a `contract` form be added to the language, creating a
+scope in place of the top level for contract elements, such as circuit
+definitions and witness function declarations.  It would look much
+like a class definition in object-oriented languages.
+
+For example, within a Compact file, there might be a contract
+definition like this:
+
+```compact
+contract C {
+  export circuit myCircuit(Uint<32> x): Uint<32> {
+    return x;
+  }
+}
+```
+
+Using the `include` form, this would support the creation of libraries
+of contracts.  Furthermore, the intent to implement an interface could
+be incorporated directly into the `contract` form.
+
+It may still be useful to take Compact in this direction, but it would
+be a large change, and it would not address the real need for more
+dynamic composition of contracts, so it was set aside for now.
+
+### Concrete Contract Types
+
+The current proposal introduced contract types that are entirely
+derived from *interfaces*.  Once again drawing inspiration from
+object-oriented languages, Compact could have not only interfaces, but
+also *concrete contract types*.  For example, defining a contract in
+`C.compact` could implicitly create a contract type `C`.  Other
+contracts might use the type `C` as a program-defined type, able to
+refer to values that represented deployments of `C` (that is, exactly
+`C`, not "some contract with the circuits of `C`).
+
+An extreme step in this direction would be to abandon interface
+altogether, allowing contract inheritance and abstract contract
+definitions, in which some or all of the circuits are declared, but
+not defined.  With this extension, the aforementioned contract type
+`C` would represent deployments of `C` (assuming `C` was fully
+defined, with definitions for every circuit), as well as all contract
+types inheriting from `C`.
+
+A major problem with this direction is that contracts do not have
+explicit names in the current language.  The "name" of a contract is
+implicit in the name of the file defining it.  Any design relying on
+contract names would probably require the explicit contract-defining
+form of the preceding section.
+
+Furthermore, many of the multi-contract systems that people want to
+build using Compact, such as token exchanges and systems for making
+assertions about real-world entities, are a better fit for pure
+interfaces.  With the current proposal, a contract can say, "Here is
+what I require of any contract that wants to participate in my
+system," without imposing any inheritance structure on the contracts.
+
+### Other Ways of Finding Contract Code
+
+The current proposal describes a very limited way to find the
+implementation code for the circuits of an interface.  Several other
+ways to find the code were suggested.  Here are a few.
+
+- The application provides a map from contract addresses to filesystem
+  paths, saying where to find the code for a given deployed contract.
+- The application provides a map from interface names to filesystem
+  paths, saying where to find the code that implements a given
+  interface.
+- The application provides a URL for an external service that supplies
+  one of the preceding mappings.
+- Some representation of circuit code is stored in the ledger when a
+  contract is deployed, and any contract calling one of those circuits
+  uses the ledger-stored code.
+  
+In fact, it is expected that a later proposal will extend Compact
+using this last idea: storing an intermediate representation of
+circuit code in the Midnight ledger.  If such an extension were not on
+the horizon, one of the other alternatives might have been included in
+this proposal, but with the expectation that a canonical definition
+for each circuit will soon be available, any other alternative would
+only create unnecessarily complicated infrastructure.
 
 ## References
 
@@ -376,11 +552,26 @@ Link to relevant related work, such as research papers or similar features in
 other contexts.
 -->
 
-## Acknowledgements
+## Acknowledgments
 
 <!--
 Acknowledge non-authors who helped with the CoIP.
 -->
+
+Many designs for extending Compact to support multi-contract systems
+have been discussed, a few of which are described in the Rejected
+Ideas section.  All of these were discussed at length (and some
+written up as full specifications), with
+- Joseph Denman
+- Kent Dybvig
+- Kevin Millikin
+
+Many thanks to them for their contributions to this proposal and its
+predecessors.  Also, Thomas Kerber's *Kachina* system that formed the
+foundations of Midnight already made space for multi-contract
+interactions, and Jonathan Rossie's original vision for the language
+that become Compact included the ability for one contract to call
+another.  None of this would exist without their work.
 
 ## Copyright
 
