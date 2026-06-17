@@ -87,7 +87,7 @@ circuit code that implements a contract interface and with support for witness
 functions and private state in called circuits.  This proposal
 describes only the first step in that direction.
 
-Specifically, two major limitations are incorporated into this first
+Specifically, three major limitations are incorporated into this first
 proposal for multi-contract system support:
 
 1. When a contract holds a reference to another contract of interface
@@ -96,7 +96,8 @@ proposal for multi-contract system support:
    `T.compact` and that it is available in the same application
    context as the caller.  (This limitation is described more
    precisely in the following section.)
-2. Contracts to be called by other contracts must not define witness
+2. The behavior of recursive cross-contract calls is undefined.
+3. Contracts to be called by other contracts must not define witness
    functions.  That is, cross-contract calls can be made only to
    contracts with no private state.
 
@@ -302,6 +303,11 @@ ledger state operation: the contract reference, followed by a dot
 declared in the interface of the contract reference's type, followed
 by the arguments to the circuit call.
 
+When the called circuit is not declared to be pure in the contract
+interface, the call's arguments must be explicitly disclosed (using
+the `disclose` form) somewhere along the path to the call, because the
+called circuit might make its arguments publicly visible.
+
 ### Limitations
 
 Implementing these improvements, without additional constraints,
@@ -319,7 +325,18 @@ being available, the following additional limitations are imposed.
    path when executing any circuits that make cross-contract calls
    using references of type `T`.  This effectively limits any DApp to
    a single implementation of each contract interface.
-2. A contract that declares witnesses is unable to implement any
+2. If any cycles are present in the call graph of cross-contract
+   calls, the behavior is undefined.  This implies that contracts
+   cannot implement either direct or indirect recursion using calls
+   through references to contract values.  This is a restriction on
+   the *implementation* of contracts.  For example, suppose a circuit
+   in `S.compact` makes a cross-contract call to a circuit defined in
+   a contract interface `T`.  If the application uses an
+   implementation of `T` in which the called circuit itself makes
+   another call to a circuit defined in a contract interface `S`, the
+   compiler may reject the program, or the call may fail at execution
+   time in the deployed application.
+3. A contract that declares witnesses is unable to implement any
    interface.  This implies that every contract reference is to a
    contract with no private state, and every cross-contract call
    produces an empty private-state transcript.
@@ -327,8 +344,8 @@ being available, the following additional limitations are imposed.
 Taken together, these limit Compact's current multi-contract systems
 to those in which a "root" contract may declare witnesses and hold
 private state, but no others do.  Furthermore, the concrete
-implementations of all contracts in the system are known to any DApp
-operating over the system.
+implementations of all contracts in the system are non-recursive and
+known to any DApp operating over the system.
 
 Many interesting decentralized systems can be created under the
 preceding constraints, but the authors hope that future improvement
