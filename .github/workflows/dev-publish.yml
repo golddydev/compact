@@ -262,23 +262,29 @@ jobs:
           scope: '@midnight-ntwrk'
           node-version-file: '.nvmrc'
 
-      - name: Build publishable runtime tarball
+      - name: Build publishable runtime
         run: nix build .#runtime.forPublish -L
 
-      - name: Repack with dev version and publish
+      - name: Set dev version and publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
           DEV_VERSION: ${{ needs.setup.outputs.runtime_version }}
         run: |
           set -euo pipefail
-          TGZ="$(ls result/lib/*.tgz)"
-          echo "Built tarball: $TGZ"
-          rm -rf stage && mkdir stage
-          tar -xzf "$TGZ" -C stage          # extracts ./package/
-          cd stage/package
-          # Override only the version string; dist/ from forPublish is untouched.
-          # (flake.nix warns not to bump runtime/package.json in-repo for prereleases,
-          #  so the dev version is applied here at publish time instead.)
+          # `forPublish` produces a publish-ready package *directory* (with the
+          # publish package.json), not a tarball:
+          #   result/lib/node_modules/<scope>/<name>/   (see nix/pretzel/js.nix).
+          PKG_DIR="result/lib/node_modules/@midnight-ntwrk/compact-runtime"
+          if [ ! -d "$PKG_DIR" ]; then
+            echo "::error::runtime package not found at $PKG_DIR; tree was:"
+            find result/lib -maxdepth 4 -name package.json -print || true
+            exit 1
+          fi
+          # Copy out of the read-only nix store so `npm version` can rewrite package.json.
+          rm -rf stage && cp -rL "$PKG_DIR" stage && chmod -R u+w stage
+          cd stage
+          # Apply the dev version at publish time -- flake.nix warns not to bump
+          # runtime/package.json in-repo for prereleases.
           npm version --no-git-tag-version --allow-same-version "$DEV_VERSION"
           # Publish under dist-tag `dev` so `latest` is never moved to a dev build.
           npm publish --tag dev --registry https://npm.pkg.github.com/
