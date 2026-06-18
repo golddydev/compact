@@ -192,10 +192,9 @@ jobs:
     # The required Linux x86_64 build+test are still enforced by the verify step.
     if: ${{ always() && inputs.publish_compiler }}
     runs-on: ubuntu-latest
-    # The prerelease is created on LFDT-Minokawa/compact with the MIDNIGHTCI_REPO
-    # PAT (see step below), not GITHUB_TOKEN, so GITHUB_TOKEN needs only read here.
+    # contents:write so the checkout token can push the dev tag (see below).
     permissions:
-      contents: read
+      contents: write
     needs: [ setup, build-linux-x86, build-linux-arm, build-macos-arm, build-macos-intel, test-linux-x86 ]
     steps:
       - name: Verify required Linux x86_64 build/test passed
@@ -209,23 +208,48 @@ jobs:
           fi
           echo "Required Linux x86_64 build/test passed."
 
+      - name: Checkout target commit
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+
+      # This repo has immutable releases: a published release's tag is permanent.
+      # Publishing a draft would try to *create* the tag, which the release-tag
+      # protection blocks ("creations being restricted"). So push the tag first
+      # via git (same as internal-release.yml), then publish onto the existing tag.
+      # Idempotent: if the tag already exists (re-run on the same commit), skip --
+      # an immutable dev release for this commit is already published.
+      - name: Create and push dev tag
+        id: tag
+        env:
+          TAG: compactc-${{ needs.setup.outputs.bin_tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::notice::tag ${TAG} already exists; binary prerelease already published, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Fetch dev binary assets
+        if: ${{ steps.tag.outputs.skip == 'false' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: dev-*
           merge-multiple: true
 
-      # This repo has immutable releases: assets can only be added while a release
-      # is a draft (publishing is what makes it immutable). So create as a draft
-      # with the assets, then publish it (draft=false) in the next step. This is
-      # the same pattern internal-release.yml uses.
-      - name: Create dev prerelease draft on LFDT-Minokawa/compact
+      # Immutable releases only accept assets while still a draft, so create as a
+      # draft (uploading the assets) onto the tag pushed above, then publish it.
+      - name: Create dev prerelease draft
         id: create_release
+        if: ${{ steps.tag.outputs.skip == 'false' }}
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           repository: LFDT-Minokawa/compact
           tag_name: compactc-${{ needs.setup.outputs.bin_tag }}
-          target_commitish: ${{ needs.setup.outputs.sha }}
           name: Compact toolchain dev ${{ needs.setup.outputs.sha }}
           draft: true
           prerelease: true
@@ -241,6 +265,7 @@ jobs:
             Not a supported release. See doc/dev-builds.md for the retention policy.
 
       - name: Publish the dev prerelease
+        if: ${{ steps.tag.outputs.skip == 'false' }}
         env:
           GH_TOKEN: ${{ secrets.MIDNIGHTCI_REPO }}
           RELEASE_ID: ${{ steps.create_release.outputs.id }}
