@@ -37154,6 +37154,110 @@ groups than for single tests.
                 %t.8))
            ())))
      ))
+
+  (test-group
+    ((create-file "M.compact"
+       '(
+         "module M {"
+         "  export contract C {"
+         "    circuit fooImpure(x: Bytes<32>): [];"
+         "    pure circuit fooPure(x: Bytes<32>): [];"
+         "  }"
+         "}"
+         )
+       )
+     (succeeds))
+    ((create-file "C.compact"
+       '(
+         "import M;"
+         "contract implements C;"
+         "ledger F: Bytes<32>;"
+         "export circuit fooImpure(x: Bytes<32>): [] { F = disclose(x); }"
+         "export pure circuit fooPure(x: Bytes<32>): [] { return; }"
+         )
+       )
+     (succeeds))
+    ((create-file "UseC.compact"
+       '(
+         "import CompactStandardLibrary;"
+         "import M;"
+         "export circuit callFoos(b: Boolean, c: C, x: Bytes<32>): [] {"
+         "  if (b) {"
+         "    c.fooImpure(x);"
+         "    c.fooPure(x);"
+         "  }"
+         "}"
+         ))
+     (oops
+       message: "~a:\n  ~?"
+       irritants: '("UseC.compact line 5 char 6" "potential witness-value disclosure must be declared but is not:\n    witness value potentially disclosed:\n      ~a~{~a~}" ("the value of parameter x of exported circuit callFoos at line 3 char 43" ("\n    nature of the disclosure:\n      contract call argument 1 might disclose the witness value")))
+       message: "~a:\n  ~?"
+       irritants: '("UseC.compact line 5 char 6" "potential witness-value disclosure must be declared but is not:\n    witness value potentially disclosed:\n      ~a~{~a~}" ("the value of parameter c of exported circuit callFoos at line 3 char 37" ("\n    nature of the disclosure:\n      contract call contract reference might disclose the witness value")))
+       message: "~a:\n  ~?"
+       irritants: '("UseC.compact line 5 char 6" "potential witness-value disclosure must be declared but is not:\n    witness value potentially disclosed:\n      ~a~{~a~}" ("the value of parameter b of exported circuit callFoos at line 3 char 25" ("\n    nature of the disclosure:\n      making this contract call might disclose the boolean value of the witness value\n    via this path through the program:\n      the conditional branch at line 4 char 3"))))
+     ))
+
+  (test-group
+    ((create-file "M.compact"
+       '(
+         "module M {"
+         "  export contract C {"
+         "    circuit fooImpure(x: Bytes<32>): [];"
+         "    pure circuit fooPure(x: Bytes<32>): [];"
+         "  }"
+         "}"
+         )
+       )
+     (succeeds))
+    ((create-file "C.compact"
+       '(
+         "import M;"
+         "contract implements C;"
+         "ledger F: Bytes<32>;"
+         "export circuit fooImpure(x: Bytes<32>): [] { F = disclose(x); }"
+         "export pure circuit fooPure(x: Bytes<32>): [] { return; }"
+         )
+       )
+     (succeeds))
+    ((create-file "UseC.compact"
+       '(
+         "import CompactStandardLibrary;"
+         "import M;"
+         "export circuit callFoos(b: Boolean, c: C, x: Bytes<32>): [] {"
+         "  if (disclose(b)) {"
+         "    disclose(c).fooImpure(disclose(x));"
+         "    c.fooPure(x);"
+         "  }"
+         "}"
+         ))
+     (returns
+       (program
+         (kernel-declaration (%kernel.0 () (Kernel)))
+         (public-ledger-declaration () (constructor () (tuple)))
+         (circuit %callFoos.1 ([%b.2 (tboolean)]
+                               [%c.3 (tcontract C
+                                       (fooImpure #f ((tbytes 32)) (ttuple))
+                                       (fooPure #t ((tbytes 32)) (ttuple)))]
+                               [%x.4 (tbytes 32)])
+              (ttuple)
+           (seq
+             (if %b.2
+                 (seq
+                   (contract-call fooImpure
+                        (%c.3
+                         (tcontract C
+                           (fooImpure #f ((tbytes 32)) (ttuple))
+                           (fooPure #t ((tbytes 32)) (ttuple))))
+                     %x.4)
+                   (contract-call fooPure
+                        (%c.3
+                         (tcontract C
+                           (fooImpure #f ((tbytes 32)) (ttuple))
+                           (fooPure #t ((tbytes 32)) (ttuple))))
+                     %x.4))
+                 (tuple))
+             (tuple)))))
+     ))
 )
 
 (run-tests drop-ledger-runtime
