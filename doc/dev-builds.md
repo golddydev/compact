@@ -11,11 +11,12 @@ Nix-building compactc on every CI run.
 
 | Artifact          | Coordinate                                                         | Where                                              |
 | ----------------- | ----------------------------------------------------------------- | -------------------------------------------------- |
-| compact-runtime   | `@midnight-ntwrk/compact-runtime@<base>-dev.<short-sha>`           | GitHub Packages npm, scope `@midnight-ntwrk`       |
-| compactc binary   | release tag `compactc-dev-<short-sha>` (assets per architecture)   | GitHub prerelease on `LFDT-Minokawa/compact`       |
+| compact-runtime   | `@midnight-ntwrk/compact-runtime@<base>-dev.<sha>`                 | GitHub Packages npm, scope `@midnight-ntwrk`       |
+| compactc binary   | release tag `compactc-dev-<sha>` (assets per architecture)        | GitHub prerelease on `LFDT-Minokawa/compact`       |
 
-`<base>` is the current `version` from `runtime/package.json`; `<short-sha>` is
-`git rev-parse --short HEAD` of the resolved ref.
+`<base>` is the current `version` from `runtime/package.json`; `<sha>` is the
+full 40-char commit SHA (`git rev-parse HEAD`) of the resolved ref -- full, not
+abbreviated, so the coordinate is unambiguous and cannot collide.
 
 The runtime is published under npm dist-tag `dev`, so it never moves `latest`.
 The binary release is flagged `prerelease`, so it never becomes "Latest release".
@@ -38,7 +39,7 @@ The binary release is flagged `prerelease`, so it never becomes "Latest release"
 Runtime (downstream `package.json`), pin the exact dev version:
 
 ```jsonc
-"@midnight-ntwrk/compact-runtime": "0.16.101-dev.abc1234"
+"@midnight-ntwrk/compact-runtime": "0.16.101-dev.<full-commit-sha>"
 ```
 
 with an `.npmrc` mapping the scope to GitHub Packages:
@@ -49,12 +50,12 @@ with an `.npmrc` mapping the scope to GitHub Packages:
 ```
 
 compactc binary, download the per-arch asset from the
-`compactc-dev-<short-sha>` prerelease, e.g.:
+`compactc-dev-<sha>` prerelease, e.g.:
 
 ```
-gh release download compactc-dev-abc1234 \
+gh release download compactc-dev-<full-commit-sha> \
   --repo LFDT-Minokawa/compact \
-  --pattern 'compactc_dev-abc1234_x86_64-unknown-linux-musl.zip'
+  --pattern 'compactc_dev-<full-commit-sha>_x86_64-unknown-linux-musl.zip'
 ```
 
 ## Retention policy

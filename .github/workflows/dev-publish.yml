@@ -12,10 +12,11 @@
 #   - Input `branch` selects the ref to build and publish from.
 #
 # Coordinates produced (stable, pinnable)
-#   - npm:    @midnight-ntwrk/compact-runtime@<base>-dev.<short-sha>  (dist-tag `dev`)
+#   - npm:    @midnight-ntwrk/compact-runtime@<base>-dev.<sha>  (dist-tag `dev`)
 #             registry https://npm.pkg.github.com/  (scope @midnight-ntwrk)
-#   - binary: GitHub *prerelease* on this repo, tag `compactc-dev-<short-sha>`,
-#             assets compactc_dev-<short-sha>_<arch>.zip
+#   - binary: GitHub *prerelease* on this repo, tag `compactc-dev-<sha>`,
+#             assets compactc_dev-<sha>_<arch>.zip
+#   <sha> is the full 40-char commit SHA.
 #
 # Retention
 #   - npm `dev.*` prereleases publish under dist-tag `dev` and never move `latest`.
@@ -69,7 +70,7 @@ jobs:
       contents: read
     outputs:
       branch: ${{ inputs.branch }}
-      short_sha: ${{ steps.coord.outputs.short_sha }}
+      sha: ${{ steps.coord.outputs.sha }}
       bin_tag: ${{ steps.coord.outputs.bin_tag }}
       runtime_version: ${{ steps.coord.outputs.runtime_version }}
       linux_arm: aarch64-unknown-linux-musl
@@ -86,13 +87,15 @@ jobs:
         id: coord
         run: |
           set -euo pipefail
-          SHORT_SHA="$(git rev-parse --short HEAD)"
+          # Use the full 40-char commit SHA so the coordinate is unambiguous and
+          # cannot collide (short SHAs can, in a repo this size).
+          SHA="$(git rev-parse HEAD)"
           BASE_VERSION="$(node -p "require('./runtime/package.json').version")"
-          RUNTIME_VERSION="${BASE_VERSION}-dev.${SHORT_SHA}"
-          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "bin_tag=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          RUNTIME_VERSION="${BASE_VERSION}-dev.${SHA}"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "bin_tag=dev-${SHA}" >> "$GITHUB_OUTPUT"
           echo "runtime_version=${RUNTIME_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "compactc binary tag: dev-${SHORT_SHA}"
+          echo "compactc binary tag: dev-${SHA}"
           echo "runtime npm version:  ${RUNTIME_VERSION}"
 
   build-linux-x86:
@@ -186,6 +189,8 @@ jobs:
     name: Publish compactc binary as a dev prerelease
     if: ${{ inputs.publish_compiler }}
     runs-on: ubuntu-latest
+    # The prerelease is created on LFDT-Minokawa/compact with the MIDNIGHTCI_REPO
+    # PAT (see step below), not GITHUB_TOKEN, so GITHUB_TOKEN needs only read here.
     permissions:
       contents: read
     needs: [ setup, build-linux-x86, build-linux-arm, build-macos-arm, build-macos-intel, test-linux-x86 ]
@@ -213,8 +218,8 @@ jobs:
         with:
           repository: LFDT-Minokawa/compact
           tag_name: compactc-${{ needs.setup.outputs.bin_tag }}
-          target_commitish: ${{ needs.setup.outputs.short_sha }}
-          name: Compact toolchain dev ${{ needs.setup.outputs.short_sha }}
+          target_commitish: ${{ needs.setup.outputs.sha }}
+          name: Compact toolchain dev ${{ needs.setup.outputs.sha }}
           draft: false
           prerelease: true
           fail_on_unmatched_files: true
@@ -223,7 +228,7 @@ jobs:
           body: |
             On-demand dev build of the Compact toolchain.
 
-            - Source ref: `${{ needs.setup.outputs.branch }}` @ `${{ needs.setup.outputs.short_sha }}`
+            - Source ref: `${{ needs.setup.outputs.branch }}` @ `${{ needs.setup.outputs.sha }}`
             - Runtime npm: `@midnight-ntwrk/compact-runtime@${{ needs.setup.outputs.runtime_version }}` (dist-tag `dev`)
 
             Not a supported release. See doc/dev-builds.md for the retention policy.
@@ -232,6 +237,9 @@ jobs:
     name: Publish compact-runtime dev npm package
     if: ${{ inputs.publish_runtime }}
     runs-on: ubuntu-latest
+    # npm publish authenticates with the MIDNIGHTCI_PACKAGES_WRITE PAT against the
+    # @midnight-ntwrk scope (a different org than this repo), so GITHUB_TOKEN's
+    # packages scope does not apply -- contents:read (for checkout) is sufficient.
     permissions:
       contents: read
     needs: [ setup ]
