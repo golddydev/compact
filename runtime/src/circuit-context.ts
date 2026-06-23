@@ -442,7 +442,7 @@ export const queryLedgerState = (
     const liveAddress = circuitContext.callContext.contractAddress;
     if (liveAddress !== undefined && circuitContext.queryContexts !== undefined) {
       circuitContext.queryContexts[liveAddress] = res.context;
-      const current_gas = circuitContext.gasCosts[liveAddress] ?? emptyRunningCost()
+      const current_gas = circuitContext.gasCosts[liveAddress] ?? emptyRunningCost();
       circuitContext.gasCosts[liveAddress] = addRunningCost(current_gas, res.gasCost);
     }
 

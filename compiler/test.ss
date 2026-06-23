@@ -69992,6 +69992,12 @@ groups than for single tests.
      (stage-javascript liarCode "test-center/ts/composable/purity.ts")))
 
   (test-group
+    ((source-file "test-center/composable/CalleeWitness/Callee.compact")
+     (stage-javascript calleeCode '()))
+    ((source-file "test-center/composable/CalleeWitness/Caller.compact")
+     (stage-javascript callerCode "test-center/ts/composable/callee-witness.ts")))
+
+  (test-group
     ((source-file "test-center/composable/Recursion/Mutual/A.compact")
      (stage-javascript aCode '()))
     ((source-file "test-center/composable/Recursion/Mutual/B.compact")

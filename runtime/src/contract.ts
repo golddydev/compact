@@ -69,7 +69,7 @@ type ContractCtor = new (witnesses: Record<string, never>) => Contract;
 type Module = {
   Contract: ContractCtor;
   pureCircuits: PureCircuits;
-}
+};
 
 /**
  * @internal
@@ -327,7 +327,12 @@ const assertNotDefaultContractAddress = (address: ocrt.ContractAddress): void =>
   }
 };
 
-const assertPurityMatches = (module: Module, calleeCircuitId: CircuitId, calleeAddress: ocrt.ContractAddress, calleeIsPure: boolean): void => {
+const assertPurityMatches = (
+  module: Module,
+  calleeCircuitId: CircuitId,
+  calleeAddress: ocrt.ContractAddress,
+  calleeIsPure: boolean,
+): void => {
   const pureCircuit = module.pureCircuits[calleeCircuitId];
   const errMsg = `pure circuit '${calleeCircuitId}' for callee '${calleeAddress}'`;
   if (calleeIsPure) {
@@ -335,7 +340,7 @@ const assertPurityMatches = (module: Module, calleeCircuitId: CircuitId, calleeA
   } else {
     assertUndefined(pureCircuit, errMsg);
   }
-}
+};
 
 /**
  * Enforces the re-entrancy guard for a cross-contract call and records the callee as
@@ -354,12 +359,37 @@ const assertNoReentrancy = (circuitContext: CircuitContext, calleeAddress: ocrt.
     if (circuitContext.activeContracts.has(calleeAddress)) {
       throw new CompactError(
         `Contract re-entrancy detected: '${calleeAddress}' is already executing on the call stack; ` +
-          `re-entrant cross-contract calls are not permitted`,
+          `re-entrant cross-contract calls are not yet supported`,
       );
     }
     circuitContext.activeContracts.add(calleeAddress);
   }
 };
+
+/**
+ * Builds the `witnesses` argument for constructing a cross-contract callee. Witnesses are
+ * only available to the entry (root) contract, so a callee can never execute one — but
+ * the generated `Contract` constructor validates a function-valued field for every witness
+ * the callee *declares*, so passing `{}` throws (with an opaque field-name message) even
+ * when the called circuit needs no witness. This proxy passes those `typeof` checks for any
+ * name, so construction succeeds and witness-free circuits run unchanged; if the callee
+ * circuit actually invokes a witness, the stub throws a clear, self-describing error.
+ *
+ * @internal
+ */
+const forbiddenCalleeWitnesses = (calleeAddress: ocrt.ContractAddress): Record<string, never> =>
+  new Proxy(
+    {},
+    {
+      get: (_target, witnessName) => () => {
+        throw new CompactError(
+          `Cross-contract callee '${calleeAddress}' invoked witness '${String(witnessName)}': ` +
+            `witnesses are only available to the entry (root) contract, not to a contract reached ` +
+            `via a cross-contract call`,
+        );
+      },
+    },
+  ) as Record<string, never>;
 
 /**
  * Calls a circuit defined in another contract from the currently executing contract and returns the result.
@@ -388,7 +418,7 @@ export const crossContractCall = async (
   assertPurityMatches(calleeModule, calleeCircuitId, calleeAddress, calleeIsPure);
   assertNoReentrancy(circuitContext, calleeAddress);
   try {
-    const provableCircuit = new calleeModule.Contract({}).provableCircuits[calleeCircuitId];
+    const provableCircuit = new calleeModule.Contract(forbiddenCalleeWitnesses(calleeAddress)).provableCircuits[calleeCircuitId];
     assertDefined(provableCircuit, `'${calleeCircuitId}' for callee '${calleeAddress}'`);
     const calleeQueryContext = await resolveQueryContext(circuitContext, calleeAddress);
     const calleeGasCosts = resolveGasCost(circuitContext, calleeAddress);
