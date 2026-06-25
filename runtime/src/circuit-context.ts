@@ -125,6 +125,15 @@ export interface CircuitContext<PS = any> {
    */
   gasCosts: Record<ocrt.ContractAddress, ocrt.RunningCost>;
   /**
+   * The deployed {@link ocrt.ContractState} of every cross-contract callee resolved during the
+   * execution, keyed by address. Populated by {@link crossContractCall} (via the state provider)
+   * the first time a callee is reached. Retained — unlike the cached query context, which keeps only
+   * ledger data — so the implementation-binding guard can read a callee's deployed verifier key for
+   * *any* of its circuits on *every* call, including later calls to a different circuit of an
+   * already-resolved callee. The entry contract is not recorded here; only fetched callees are.
+   */
+  contractStates?: Record<ocrt.ContractAddress, ocrt.ContractState>;
+  /**
    * The cost model to use for the execution.
    */
   costModel: ocrt.CostModel;
@@ -140,6 +149,23 @@ export interface CircuitContext<PS = any> {
    * Can fetch the current state of a contract from the blockchain.
    */
   stateProvider?: ContractStateProvider;
+  /**
+   * When `true`, {@link crossContractCall} refuses to enter a contract that is
+   * already executing on the current call stack — i.e. a re-entrant cross-contract
+   * call (`A -> A`, or `A -> B -> A`) — and throws instead. On by default (the
+   * upstream ledger can mis-apply transcripts on re-entry). Pass `false` to
+   * {@link createCircuitContext} to opt out, e.g. for tests that deliberately
+   * exercise recursion.
+   */
+  reentrancyGuard?: boolean;
+  /**
+   * The set of contract addresses currently executing on the cross-contract call
+   * stack: the entry contract plus every callee whose call has not yet returned.
+   * Maintained by {@link crossContractCall} and shared by reference across the call
+   * tree (via {@link copyCircuitContext}). Only consulted when {@link reentrancyGuard}
+   * is set.
+   */
+  activeContracts?: Set<ocrt.ContractAddress>;
 }
 
 /**
@@ -160,6 +186,9 @@ export interface CircuitContext<PS = any> {
  * @param time The current time. Used to execute the block time related kernel operations.
  * @param parentBlockHash The hash of the block the transaction is being built on. Also passed to {@link ContractStateProvider}
  *                        to fetch the correct contract states when executing cross-contract calls.
+ * @param reentrancyGuard When `true`, cross-contract calls that re-enter a contract already executing on the call
+ *                        stack (`A -> A`, or `A -> B -> A`) throw instead of running. On by default; pass `false`
+ *                        to opt out.
  */
 export const createCircuitContext = <PS>(
   circuitId: CircuitId,
@@ -172,6 +201,7 @@ export const createCircuitContext = <PS>(
   costModel?: ocrt.CostModel,
   time?: number,
   parentBlockHash?: string,
+  reentrancyGuard?: boolean,
 ): CircuitContext<PS> => {
   const callContext = createCallContext(
     circuitId,
@@ -194,10 +224,14 @@ export const createCircuitContext = <PS>(
     ),
     queryContexts: { [contractAddress]: callContext.currentQueryContext },
     gasCosts: { [contractAddress]: callContext.currentGasCost },
+    contractStates: {},
     costModel: costModel ?? ocrt.CostModel.initialCostModel(),
     callProofDataTrace: [],
     gasLimit,
     stateProvider,
+    reentrancyGuard: reentrancyGuard ?? true,
+    // The entry contract is on the call stack for the whole transaction.
+    activeContracts: new Set([contractAddress]),
   };
 };
 
@@ -205,10 +239,15 @@ export const createCircuitContext = <PS>(
  * @internal
  */
 export const copyCircuitContext = (context: CircuitContext): CircuitContext => ({
+  // `reentrancyGuard` and `activeContracts` fall through the spread: the guard
+  // flag is copied by value and the active-contract set is intentionally shared
+  // *by reference* across the whole call tree so `crossContractCall` sees one
+  // coherent call stack. Do not deep-copy `activeContracts` here.
   ...context,
   callContext: { ...context.callContext },
   queryContexts: { ...context.queryContexts },
   gasCosts: { ...context.gasCosts },
+  contractStates: { ...context.contractStates },
   callProofDataTrace: [...context.callProofDataTrace],
 });
 
@@ -222,9 +261,6 @@ export const finalizeCallProofData = (circuitContext: CircuitContext, proofData:
 
   assertDefined(initialQueryContext, `initial ledger context for contract '${contractAddress}'`);
   assertDefined(currentQueryContext, `current ledger context for contract '${contractAddress}'`);
-
-  circuitContext.queryContexts[contractAddress] = currentQueryContext;
-  circuitContext.gasCosts[contractAddress] = circuitContext.callContext.currentGasCost;
 
   circuitContext.callProofDataTrace.push({
     ...proofData,
@@ -410,6 +446,17 @@ export const queryLedgerState = (
     const res = circuitContext.callContext.currentQueryContext.query(program, circuitContext.costModel, circuitContext.gasLimit);
     circuitContext.callContext.currentQueryContext = res.context;
     circuitContext.callContext.currentGasCost = addRunningCost(circuitContext.callContext.currentGasCost, res.gasCost);
+
+    // The generated ledger read-accessors (`contract.ledger(state).field`) also run read queries through this function,
+    // but with a minimal synthetic context that has no `queryContexts`/`gasCosts` maps and no `callContext.contractAddress`.
+    // Only thread the per-address cells when we are in a real circuit context.
+    const liveAddress = circuitContext.callContext.contractAddress;
+    if (liveAddress !== undefined && circuitContext.queryContexts !== undefined) {
+      circuitContext.queryContexts[liveAddress] = res.context;
+      const current_gas = circuitContext.gasCosts[liveAddress] ?? emptyRunningCost();
+      circuitContext.gasCosts[liveAddress] = addRunningCost(current_gas, res.gasCost);
+    }
+
     const reads = res.events.filter((e) => e.tag === 'read');
     let i = 0;
     partialProofData.publicTranscript = partialProofData.publicTranscript.concat(

@@ -48,6 +48,7 @@ describe('[Composable contracts] Compiler', () => {
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
 
+        /* Issue 201: this is no longer a static error
         test('when contracts have circular reference - A is main', async () => {
             copyFiles('../examples/composable/cases/circular-reference/*.compact', contractsDir);
 
@@ -58,7 +59,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}A`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when contracts have circular reference - B is main', async () => {
             copyFiles('../examples/composable/cases/circular-reference/*.compact', contractsDir);
 
@@ -69,6 +72,7 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}B`).thatNoFilesAreGenerated();
         });
+        */
 
         test('when you use dependent contract as variable in main contract constructor', async () => {
             copyFiles('../examples/composable/cases/contract-as-variable/*.compact', contractsDir);
@@ -130,6 +134,7 @@ describe('[Composable contracts] Compiler', () => {
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract circuit definition has invalid parameters', async () => {
             copyFiles('../examples/composable/cases/invalid-definition/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A']);
@@ -141,7 +146,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract circuit definition has invalid return types', async () => {
             copyFiles('../examples/composable/cases/invalid-definition-return/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A']);
@@ -153,7 +160,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract compilation order is invalid', async () => {
             copyFiles('../examples/composable/cases/invalid-order/*.compact', contractsDir);
 
@@ -171,6 +180,7 @@ describe('[Composable contracts] Compiler', () => {
                 true,
             );
         });
+        */
 
         test('when you define dependent contract in module', async () => {
             copyFiles('../examples/composable/cases/module-contract/*.compact', contractsDir);
@@ -196,6 +206,7 @@ describe('[Composable contracts] Compiler', () => {
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract definition has additional (non-existing) circuit added', async () => {
             copyFiles('../examples/composable/cases/non-existing-circuit/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A']);
@@ -207,7 +218,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract does not exist (and it is not compiled)', async () => {
             copyFiles('../examples/composable/cases/non-existing-contract-impl/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A', 'B']);
@@ -219,7 +232,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract definition has just non-existing circuit', async () => {
             copyFiles('../examples/composable/cases/non-existing-definition/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A']);
@@ -231,7 +246,9 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
+        /* Issue 201: this is no longer a static error
         test('when dependent contract definition has non-exported circuit', async () => {
             copyFiles('../examples/composable/cases/not-exported-circuit/*.compact', contractsDir);
             await compileQueue(contractsDir, ['A']);
@@ -243,6 +260,7 @@ describe('[Composable contracts] Compiler', () => {
             );
             expectFiles(`${contractsDir}main`).thatNoFilesAreGenerated();
         });
+        */
 
     });
 

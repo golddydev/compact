@@ -136,6 +136,7 @@
       cdefn
       wdecl
       ecdecl
+      cidecl
       structdef
       enumdef
       tdefn)
@@ -184,6 +185,9 @@
     (External-Contract-Circuit (ecdecl-circuit)
       (src pure-dcl function-name (arg* ...) type) =>
         (pure-dcl function-name (arg* 0 ...) 4 type)
+      )
+    (Contract-Implements-Declaration (cidecl)
+      (contract-implements src type) => (contract-implements type)
       )
     (Structure-Definition (structdef)
       (struct src exported? struct-name (type-param* ...) arg* ...) =>
@@ -488,13 +492,14 @@
          (string (mesg opaque-type file discloses))))
     (Program (p)
       (- (program src pelt* ...))
-      (+ (program src ((export-name* name*) ...) (unused-pelt* ...) (ecdecl* ...) pelt* ...)
+      (+ (program src ((export-name* name*) ...) (unused-pelt* ...) (ecdecl* ...) (cidecl* ...) pelt* ...)
            => (program ((export-name* name*) 0 ...) #f pelt* ...)))
     (Program-Element (pelt unused-pelt)
       (- mdefn
          idecl
          xdecl
          ecdecl
+         cidecl
          structdef
          enumdef
          tdefn
@@ -629,7 +634,7 @@
       (native-entry (native-entry))
       )
     (Program (p)
-      (program src (contract-name* ...) ((export-name* name*) ...) pelt* ...) => (program #f pelt* ...))
+      (program src (contract-type* ...) ((export-name* name*) ...) pelt* ...) => (program #f pelt* ...))
     (Program-Element (pelt)
       cdefn
       ndecl
@@ -747,8 +752,7 @@
       (topaque src opaque-type)              => (topaque opaque-type)
       (tvector src len type)                 => (tvector len type)
       (ttuple src type* ...)                 => (ttuple type* ...)
-      (tcontract src contract-name (elt-name* pure-dcl* (type** ...) type*) ...) =>
-        (tcontract contract-name #f (elt-name* pure-dcl* (type** ...) #f type*) ...)
+      contract-type
       (tstruct src struct-name (elt-name* type*) ...) =>
         (tstruct struct-name #f (elt-name* type*) ...)
       (tenum src enum-name elt-name elt-name* ...) =>
@@ -758,7 +762,10 @@
       (talias src nominal? type-name type) =>
         (talias nominal? type-name #f type)
       (tundeclared)
-      (tunknown)))
+      (tunknown))
+    (Contract-Type (contract-type)
+      (tcontract src contract-name (elt-name* pure-dcl* (type** ...) type*) ...) =>
+        (tcontract contract-name #f (elt-name* pure-dcl* (type** ...) #f type*) ...)))
 
   (define-language/pretty Lnotundeclared (extends Ltypes)
     (Type (type)
@@ -845,8 +852,8 @@
       (+ (id (name var-name function-name ledger-field-name descriptor-id))
          (hashtable (descriptor-table))))
     (Program (p)
-      (- (program src (contract-name* ...) ((export-name* name*) ...) pelt* ...))
-      (+ (program src ((export-name* name*) ...) tdescs pelt* ...) => (program #f tdescs #f pelt* ...)))
+      (- (program src (contract-type* ...) ((export-name* name*) ...) pelt* ...))
+      (+ (program src (contract-type* ...) ((export-name* name*) ...) tdescs pelt* ...) => (program #f tdescs #f pelt* ...)))
     (Type-Descriptors (tdescs)
       (+ (type-descriptors descriptor-table (descriptor-id* type*) ...) =>
            (type-descriptors #f (descriptor-id* type*) ...)))
@@ -883,7 +890,7 @@
       (+ (boolean (pure-dcl)))
       (- (procedure (result-type runtime-code))))
     (Program (p)
-      (- (program src (contract-name* ...) ((export-name* name*) ...) pelt* ...))
+      (- (program src (contract-type* ...) ((export-name* name*) ...) pelt* ...))
       (+ (program src ((export-name* name*) ...) pelt* ...) => (program #f pelt* ...)))
     (Program-Element (pelt)
       (- export-tdefn))

@@ -173,7 +173,7 @@
           (let ([ldescriptor* (reverse rdescriptor*)])
             (values (map car ldescriptor*) (map cdr ldescriptor*))))))
     (Program : Program (ir) -> Program ()
-      [(program ,src (,contract-name* ...) ((,export-name* ,name*) ...) ,pelt* ...)
+      [(program ,src (,[contract-type*] ...) ((,export-name* ,name*) ...) ,pelt* ...)
        (fluid-let ([program-src src])
          (let ([pelt* (map Program-Element pelt*)])
            ; FIXME: assuming we get only (align <value> 1) or (align <value> 8).
@@ -191,7 +191,7 @@
              (with-output-language (Ltypescript Type)
                `(tunsigned ,src ,(- (expt 2 128) 1))))
            (let-values ([(descriptor-id* type*) (get-descriptors)])
-             `(program ,src ((,export-name* ,name*) ...)
+             `(program ,src (,contract-type* ...) ((,export-name* ,name*) ...)
                 (type-descriptors ,descriptor-table (,descriptor-id* ,type*) ...)
                 ,pelt* ...))))])
     (Program-Element : Program-Element (ir) -> Program-Element ()
@@ -484,7 +484,9 @@
         (format "__compactContractsImport_~a" contract-name))
 
       (define (contract-import-path contract-name)
-        (format "../../~a/contract/index.js" contract-name))
+        (if (string=? (print-contract-name contract-name) (get-self-contract-name))
+            "."
+            (format "../../~a/contract/index.js" contract-name)))
 
       (define (pl-array->public-bindings pl-array)
         (let f ([pl-array pl-array] [pb* '()])
@@ -815,43 +817,6 @@
           (if (symbol? contract-name)
               (symbol->string contract-name)
               contract-name))
-      (define (get-contract-dependencies)
-        (define (contract-info-filename contract-name)
-          (format "~a/~a/compiler/contract-info.json"
-            (path-parent (target-directory))
-            contract-name))
-        (define (malformed msg contract-name . args)
-          (external-errorf "malformed contract-info file ~a for ~s: ~a; try recompiling ~a"
-                           (contract-info-filename contract-name)
-                           contract-name
-                           (apply format msg args)
-                           contract-name))
-        (define (get-assoc key contract-name alist)
-          (cond
-            [(and (pair? alist) (assoc key alist)) => cdr]
-            [else (malformed "missing association for ~s" contract-name key)]))
-        (define (get-witness-names contract-name v)
-          (fold-right (lambda (alist name*) (cons (get-assoc "name" contract-name alist) name*))
-                      '()
-                      (vector->list v)))
-        (let* ([contract-has-witness-ht (make-hashtable symbol-hash eq?)]
-               [contract-ht (contract-ht)]
-               [dep-contracts (vector->list (hashtable-keys contract-ht))]
-               [contract-has-witness*
-                 (fold-right (lambda (contract-name contract-name*)
-                               (let ([a (hashtable-cell contract-has-witness-ht contract-name 'unvisited)])
-                                 (when (eq? (cdr a) 'unvisited)
-                                   (let* ([info (hashtable-cell contract-ht contract-name #f)]
-                                          [alist (cdr info)]
-                                          [v (get-assoc "witnesses" contract-name alist)])
-                                     (unless (vector? v) (malformed "\"witnesses\" is not associated with a vector" contract-name))
-                                     (set-cdr! a (get-witness-names contract-name v))))
-                                 (if (eq? (cdr a) '())
-                                     contract-name*
-                                     (cons (car a) contract-name*))))
-                   '()
-                   dep-contracts)])
-          (values contract-has-witness* contract-has-witness-ht)))
 
       (define (subst-tcontract type)
         (nanopass-case (Ltypescript Type) (de-alias type)
@@ -1205,17 +1170,21 @@
               (newline)
               (display-string "export declare function ledger(state: __compactRuntime.StateValue | __compactRuntime.ChargedState): Ledger;\n")
               (display-string "export declare const pureCircuits: PureCircuits;\n")
+              (display-string "export declare const expectedVk: Record<string, string>;\n")
               ))))
 
       (module (print-contract.js)
-        (define (print-contract-header contract-dependency*)
+        (define (print-contract-header contract-type*)
           (display-string "import * as __compactRuntime from '@midnight-ntwrk/compact-runtime';\n")
           (for-each
-            (lambda (contract-name)
-              (printf "import * as ~a from '~a';\n"
-                      (contract-import-binding contract-name)
-                      (contract-import-path contract-name)))
-            contract-dependency*)
+            (lambda (contract-type)
+              (let ([contract-name (nanopass-case (Ltypescript Contract-Type) contract-type
+                                     [(tcontract ,src ,contract-name (,elt-name* ,pure-dcl* (,type** ...) ,type*) ...)
+                                      contract-name])])
+                (printf "import * as ~a from '~a';\n"
+                  (contract-import-binding contract-name)
+                  (contract-import-path contract-name))))
+            contract-type*)
           (printf "__compactRuntime.checkRuntimeVersion('~a');\n" runtime-version-string)
           (display-string "\n"))
 
@@ -2392,28 +2361,40 @@
                (newline)]
               [else (void)])))
 
+        ;; Emit the per-circuit verifier-key fingerprints computed in passes.ss after key
+        ;; generation. A caller's cross-contract guard reads the callee module's `expectedVk` to
+        ;; detect a contract deployed at the call target that does not match the implementation this
+        ;; module was compiled against. Empty (`{}`) for builds that generate no keys (e.g. --skip-zk).
+        (define (print-expected-vk)
+          (let ([vk* (verifier-key-hashes)])
+            (if (null? vk*)
+                (display-string "export const expectedVk = {};\n")
+                (begin
+                  (display-string "export const expectedVk = {\n")
+                  (for-each
+                    (lambda (pair)
+                      (printf "  ~a: ~a,\n"
+                        (format-javascript-string (car pair))
+                        (format-javascript-string (cdr pair))))
+                    vk*)
+                  (display-string "};\n")))
+            (newline)))
+
         (define (print-contract-footer)
           (display-string "//# sourceMappingURL=index.js.map\n"))
 
-        (define (print-contract.js src descriptor-id* type* xpelt* uname*)
+        (define (print-contract.js src contract-type* descriptor-id* type* xpelt* uname*)
           (parameterize ([current-output-port (get-target-port 'contract.js)])
             (fluid-let ([sourcemap-tracker (make-sourcemap-tracker)])
-              (let-values ([(contract-has-witness* contract-has-witness-ht) (get-contract-dependencies)])
-                (unless (null? contract-has-witness*)
-                  (source-errorf src
-                    "cross-contract dependency ~a declares witness(es) ~a; only the root contract may declare witnesses"
-                    (car contract-has-witness*)
-                    (hashtable-ref contract-has-witness-ht (car contract-has-witness*) '())))
-                (let ([contract-dependency*
-                        (vector->list (hashtable-keys (contract-ht)))])
-                  (print-contract-header contract-dependency*)
-                  (print-exported-types xpelt*)
-                  (print-contract-descriptors src descriptor-id* type*)
-                  (print-contract-class src xpelt* uname*)
-                  (for-each print-contract-reference-locations xpelt*)
-                  (print-contract-footer)
-                  (record-sourcemap-eof! sourcemap-tracker (port-position (current-output-port)))
-                  (display-sourcemap sourcemap-tracker (get-target-port 'contract.js.map))))))))
+              (print-contract-header contract-type*)
+              (print-exported-types xpelt*)
+              (print-contract-descriptors src descriptor-id* type*)
+              (print-contract-class src xpelt* uname*)
+              (for-each print-contract-reference-locations xpelt*)
+              (print-expected-vk)
+              (print-contract-footer)
+              (record-sourcemap-eof! sourcemap-tracker (port-position (current-output-port)))
+              (display-sourcemap sourcemap-tracker (get-target-port 'contract.js.map))))))
 
       (define (format-javascript-string s)
         (define quote-seen #f)
@@ -2619,12 +2600,12 @@
           [else #f]))
       )
     (Program : Program (ir) -> Program ()
-      [(program ,src ((,export-name* ,name*) ...) (type-descriptors ,descriptor-table^ (,descriptor-id* ,type*) ...) ,pelt* ...)
+      [(program ,src (,contract-type* ...) ((,export-name* ,name*) ...) (type-descriptors ,descriptor-table^ (,descriptor-id* ,type*) ...) ,pelt* ...)
        (let* ([xpelt* (maplr (lambda (x) (Program-Element x (map cons export-name* name*))) pelt*)]
               [uname* (maplr xpelt->uname xpelt*)])
          (print-contract.d.ts src xpelt* uname*)
          (fluid-let ([descriptor-table descriptor-table^])
-           (print-contract.js src descriptor-id* type* xpelt* uname*)))
+           (print-contract.js src contract-type* descriptor-id* type* xpelt* uname*)))
        ir])
     (Program-Element : Program-Element (ir export-alist) -> * (xpelt)
       (definitions
@@ -3296,16 +3277,26 @@
        ;; Lower a cross-contract call to:
        ;;   await __compactRuntime.crossContractCall(
        ;;     context,                                     // caller CircuitContext
-       ;;     <import-binding>.Contract,                   // callee ContractCtor
+       ;;     <import-binding>,                            // callee Module (Contract + pureCircuits)
        ;;     '<elt-name>',                                // callee CircuitId
        ;;     <receiver-expr>,                             // callee address from the ledger
+       ;;     <callee-is-pure>,                            // declared purity of the callee circuit
        ;;     partialProofData,                            // caller PartialProofData
        ;;     <args>...)
        (when outer-pure?
          (source-errorf src "cross-contract call from a pure circuit is not yet supported"))
        (nanopass-case (Ltypescript Type) (de-alias type)
          [(tcontract ,src^ ,contract-name (,elt-name* ,pure-dcl* (,type** ...) ,type*) ...)
-          (let ([callee-address
+          (let ([callee-is-pure
+                 (let loop ([names elt-name*] [pures pure-dcl*])
+                   (cond
+                     [(null? names)
+                      (internal-errorf 'print-typescript
+                        "contract-call references unknown circuit ~s on contract ~s"
+                        elt-name contract-name)]
+                     [(eq? (car names) elt-name) (car pures)]
+                     [else (loop (cdr names) (cdr pures))]))]
+                [callee-address
                  (make-Qconcat
                    (format "~a((" (compact-stdlib "decodeContractAddress"))
                    expr
@@ -3315,9 +3306,10 @@
                 (format "await ~a(" (compact-stdlib "crossContractCall"))
                 (apply (make-Qsep ",")
                   (cons* "context"
-                         (format "~a.Contract" (contract-import-binding contract-name))
+                         (format "~a" (contract-import-binding contract-name))
                          (format "'~a'" elt-name)
                          callee-address
+                         (if callee-is-pure "true" "false")
                          "partialProofData"
                          expr*))
                 ")")))]

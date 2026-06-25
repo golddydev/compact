@@ -47,6 +47,7 @@ describe('[Composable contracts direct] Compiler', () => {
         ).toCompileWithoutErrors();
     });
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract has been modified after compilation', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -59,6 +60,7 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
     test('should compile when dependency contract contract-info.json file is malformed - add item', async () => {
         const mainFileName = 'Main-interface.compact';
@@ -74,6 +76,7 @@ describe('[Composable contracts direct] Compiler', () => {
         expectFiles(`${contractsDir}Main`).thatGeneratedJSCodeIsValid();
     });
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - delete item', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -89,7 +92,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - empty', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -102,7 +107,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - missing contracts', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -114,7 +121,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - missing circuits', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -126,7 +135,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - missing witnesses', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -142,7 +153,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - circuits not vector', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -154,7 +167,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - change item', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -170,7 +185,9 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is malformed - change item 2', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -186,6 +203,7 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
     test('should compile when dependency contract contract-info.json file is malformed - change item - argument name', async () => {
         const mainFileName = 'Main-interface.compact';
@@ -201,6 +219,7 @@ describe('[Composable contracts direct] Compiler', () => {
         expectFiles(`${contractsDir}Main`).thatGeneratedJSCodeIsValid();
     });
 
+    /* Issue 201: this is no longer a static error
     test('should throw an error when dependency contract contract-info.json file is removed', async () => {
         const mainFileName = 'Main-interface.compact';
         const mainFilePath = contractsDir + mainFileName;
@@ -212,6 +231,7 @@ describe('[Composable contracts direct] Compiler', () => {
             compilerDefaultOutput(),
         );
     });
+    */
 
     test('should compile when dependency contract has been accessed after compilation', async () => {
         const mainFileName = 'Main-interface.compact';
