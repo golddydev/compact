@@ -99,6 +99,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `finalizeCallProofData`, and a now-exported `createInitialQueryContext` (which
   gains `parentBlockHash` and `caller` parameters and a required `time`).
 
+## [Toolchain 0.32.102, language 0.24.0, runtime 0.17.101]
+
+### Fixed
+
+- Code generation for certain casts.
+
 ## [Toolchain 0.32.101, language 0.24.0, runtime 0.17.101]
 
 ### Changed
