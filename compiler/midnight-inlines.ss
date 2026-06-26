@@ -1,5 +1,3 @@
-#!chezscheme
-
 ;;; This file is part of Compact.
 ;;; Copyright (C) 2025 Midnight Foundation
 ;;; SPDX-License-Identifier: Apache-2.0
@@ -15,13 +13,12 @@
 ;;; See the License for the specific language governing permissions and
 ;;; limitations under the License.
 
-(library (language-version)
-  (export language-version-string check-language-version)
-  (import (chezscheme) (version))
+(declare-inline-entry serialize [T (nat n)]
+  ([value T])
+  (Bytes n)
+  (serialize src n T value))
 
-  (define language-version (make-version 'language 0 24 101))
-
-  (define language-version-string (make-version-string language-version))
-
-  (define check-language-version (make-version-checker language-version))
-)
+(declare-inline-entry deserialize [T (nat n)]
+  ([value (Bytes n)])
+  T
+  (deserialize src n T value))

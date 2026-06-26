@@ -190,6 +190,7 @@
        `(elt-ref ,(token-src dot) ,expr ,(token-value elt-name))]
       [(elt-call ,src ,[expr] ,dot ,elt-name ,lparen (,[expr*] ...) (,comma* ...) ,rparen)
        `(elt-call ,(token-src dot) ,expr ,(token-value elt-name) ,expr* ...)]
+      [(emit ,src ,kwd ,lparen ,[expr] ,rparen) `(emit ,src ,expr)]
       [(= ,src ,[expr1] ,op ,[expr2])
        `(= ,(token-src op) ,expr1 ,expr2)]
       [(+= ,src ,[expr1] ,op ,[expr2])

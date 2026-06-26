@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Toolchain 0.32.104, language 0.24.101, runtime 0.17.103]
+
+### Added
+
+- The new language form `emit(expr)` emits a an event.  `expr` must have a
+  standard event type.  Constructors cannot emit an event, either directly
+  or indirectly via calls to circuits that use `emit`.  Calling `emit` makes
+  a circuit impure.
+- The onchain-runtime requires the argument passed to `emit` to be serialized.
+  Compact's standard library provides a generic `serialize<T,n>` and
+  `deserialize<T,n>`.  The end user cannot see their definition,
+  but they can see their type signature in Compact's standard library. 
+
+### Changed
+
+- The generic `serialize` and `deserialize` are defined in `midnight-inlines.ss`
+  and the macro expansion is defined in `inlines.ss` and they are inserted during
+  `expand-modules-and-types`.
+- The TypeScript wrapper for each impure exported circuit now exposes an
+  `events` field on the wrapped return value, and a corresponding `events`
+  field on `CircuitContext`.  Both refer to the same array; events emitted
+  by `emit` expressions during the circuit's execution are appended in order
+  of evaluation.  Pure circuits' wrapped return values are unaffected.
+- Updates the compact-runtime: adds the required `events` field
+  to `CircuitContext` and `CircuitResults`.  This is a **breaking** change
+  for TypeScript code that constructs these types by hand; code that uses
+  the runtime's `createCircuitContext` helper is unaffected.
+
+### Internal notes
+
+- The standard event types are defined in `compiler/midnight-events.ss` in
+  a DSL that is defined in `compiler/events.ss`.  Events are injected into
+  CompactStandardLibrary during `expand-modules-and-types`.
+- Some of the downstream type checkers did not handle `let*` forms with
+  multiple bindings properly but now do.  This was not previously a problem
+  because the upstream passes did not produce such `let*` forms.
+
 ## [Toolchain 0.32.103, language 0.24.0, runtime 0.17.102]
 
 ### Changed
