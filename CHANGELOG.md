@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Toolchain 0.32.103, language 0.24.0, runtime 0.17.102]
+
+### Changed
+
+- Pulls in ledger-9.1.0.0-rc.3
+
+## [Toolchain 0.32.102, language 0.24.0, runtime 0.17.101]
+
+### Fixed
+
+- Code generation for certain casts.
+
+## [Toolchain 0.32.101, language 0.24.0, runtime 0.17.101]
+
+### Changed
+
+- Pulls in ledger-9.1.0.0-rc.2. Note for pulling in alpha versions of the ledger:
+  in `runtime/package.json` remove the onchain-runtime dependency and update the
+  onchain-runtime nixDependency, in `runtime` run
+  `npm install --package-lock-only --ignore-scripts`, in `compact` run `nix build`
+- The runtime pulls in onchain-runtime-v4.
+
 ## [Toolchain 0.32.0, language 0.24.0, runtime 0.17.0]
 
 This release includes all changes for compiler versions in the range between
