@@ -101,6 +101,7 @@ export circuit secp256k1EcdsaVerify(
   const u1: Secp256k1Scalar = z * w;
   const u2: Secp256k1Scalar = r * w;
   const point: Secp256k1Point = ecAdd(ecMulGenerator(u1), ecMul(pk, u2));
+  assert(point != default<Secp256k1Point>, "R is the point at infinity");
   return (secp256k1PointX(point) as Bytes<32>) as Secp256k1Scalar == r;
 }
 
