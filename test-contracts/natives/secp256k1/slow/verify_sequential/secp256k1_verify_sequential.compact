@@ -1,0 +1,46 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Two and three `secp256k1EcdsaVerify` gates instantiated in a SINGLE circuit,
+// run sequentially over the same digest with independent (signature, key)
+// pairs. The point is that repeated instantiation does not panic the compiler
+// or blow up lowering.
+//
+// The ledger write makes these provable, so this is real zkir v3 lowering with
+// proving-key generation -- hence `slow/`, which the orchestrator compiles
+// exclusively. Compile coverage only: the verdicts themselves are
+// ../../ecdsa_verify's job.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export ledger n: Uint<64>;
+
+witness sigOf(i: Uint<8>): Secp256k1EcdsaSignature;
+witness keyOf(i: Uint<8>): Secp256k1Point;
+
+export circuit two(d: Bytes<32>): [] {
+    const a = secp256k1EcdsaVerify(d, sigOf(0), keyOf(0));
+    const b = secp256k1EcdsaVerify(d, sigOf(1), keyOf(1));
+    n = disclose((a && b) ? 1 : 0);
+}
+
+export circuit three(d: Bytes<32>): [] {
+    const a = secp256k1EcdsaVerify(d, sigOf(0), keyOf(0));
+    const b = secp256k1EcdsaVerify(d, sigOf(1), keyOf(1));
+    const c = secp256k1EcdsaVerify(d, sigOf(2), keyOf(2));
+    n = disclose((a && b && c) ? 1 : 0);
+}

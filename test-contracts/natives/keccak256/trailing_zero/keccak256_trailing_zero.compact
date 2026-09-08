@@ -1,0 +1,37 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// EDGE CASE -- trailing zero bytes. `keccak256<Bytes<N>>` hashes the FULL N
+// bytes of its value, trailing 0x00 included, so the digest always equals a
+// standard Keccak-256 of all N bytes.
+//
+// This is worth pinning because it has not always been true: legacy
+// compiler/runtime pairs trimmed the trailing 0x00 run off-circuit (the old
+// `CompactTypeBytes.toValue` behaviour), so a zero-ended value hashed a
+// shorter prefix and diverged from the EVM digest of the same bytes. The
+// current encoding re-pads to the declared width in `toBinaryRepr`. The
+// fixture would catch that trim coming back, and says so in the failure.
+//
+// One circuit is enough: the runtime test varies the byte pattern, not the
+// width. Cross-width consequences are ../cross_width. Pure, so no
+// `--feature-zkir-v3`.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export circuit hashBytes12(value: Bytes<12>): Bytes<32> {
+    return disclose(keccak256<Bytes<12>>(value));
+}

@@ -1,0 +1,29 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The entire secp256k1 standard library -- the `Secp256k1Point` type, the
+// signature structs, and the `secp256k1Ecdsa*` circuits -- lives in the
+// compiler's `zkir-v3-library.compact`, which is loaded only when the v3 IR is
+// enabled. So even a pure secp256k1 contract fails without the flag.
+//
+// Naming the type is the whole test, so this contract is deliberately minimal
+// rather than a copy of ../ecdsa_verify: a compile-fail fixture should provoke
+// exactly one diagnostic and nothing else.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export circuit secp256k1_requires_zkir_v3(pk: Secp256k1Point): [] { }

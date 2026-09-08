@@ -1,0 +1,36 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// EDGE CASE -- trailing zero bytes under `persistentHash`.
+//
+// A `Bytes<N>` is serialized with its trailing 0x00 run trimmed
+// (`CompactTypeBytes.toValue`), and the width is restored from the alignment
+// when the value is hashed. keccak256 is pinned against that behaviour by
+// ../../keccak256/trailing_zero, but `persistentHash` takes a different route
+// -- it hands the trimmed value and the alignment to the Rust on-chain runtime
+// rather than going through `toBinaryRepr` -- so the same guarantee is worth
+// its own fixture.
+//
+// The upstream sha256 vectors sidestep this entirely by using all-nonzero
+// filler inputs, so nothing covered it before. One width is enough: the
+// runtime test varies the byte pattern.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export circuit hashBytes12(value: Bytes<12>): Bytes<32> {
+    return disclose(persistentHash<Bytes<12>>(value));
+}

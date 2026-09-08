@@ -1,0 +1,43 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The secp256k1 ECDSA verification path: the `Secp256k1EcdsaSignature` struct,
+// the `Secp256k1Point` type, and the `secp256k1EcdsaVerify` circuit.
+//
+//   w = s^-1; u1 = e*w; u2 = r*w; P = u1*G + u2*pk; valid iff P.x == r
+//
+// `msgHash` is taken as a parameter rather than hashed in-circuit, so this
+// isolates the curve and scalar arithmetic from any hash. The full Bitcoin
+// flow, hashing in-circuit, is ../bitcoin_kat.
+//
+// ENDIANNESS: an ECDSA message representative is a BIG-endian integer, and
+// `secp256k1EcdsaVerify` reverses it internally (`hashToSecp256k1Scalar`, for
+// the `as Secp256k1Scalar` cast). So the big-endian digest passes straight
+// through with no caller-side reversal.
+//
+// Pure -- no ledger -- so it is computed off-chain and generates no proving
+// keys, but it still needs `--feature-zkir-v3` for the library itself.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export circuit verifyEcdsa(
+    msgHash: Bytes<32>,
+    sig: Secp256k1EcdsaSignature,
+    pk: Secp256k1Point
+): Boolean {
+    return disclose(secp256k1EcdsaVerify(msgHash, sig, pk));
+}

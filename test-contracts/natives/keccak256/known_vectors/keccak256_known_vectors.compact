@@ -1,0 +1,62 @@
+// This file is part of Compact.
+// Copyright (C) 2026 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//  	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// keccak256 over fixed `Bytes<N>` values, one circuit per published
+// known-vector byte length: 0 (the empty input), 1/2/5/10 (the "N zero bytes"
+// vectors), 4 ("test") and 18 ("longer test string").
+//
+// This is the fixture that pins the keccak256 CORE against published digests.
+// It matters because the runtime implements keccak256 with the same
+// @noble/hashes the tests depend on, so a computed digest would only re-check
+// the encoding; a published constant is the one oracle independent of both.
+//
+// `keccak256<Bytes<N>>` hashes the full N bytes -- trailing 0x00 is not
+// trimmed (see ../trailing_zero) -- so the all-zero vectors hash their N zero
+// bytes and `Bytes<0>` makes the empty-input vector expressible.
+//
+// Every circuit is pure, so keccak256 never enters zkir and this compiles
+// without `--feature-zkir-v3`.
+
+pragma language_version >= 0.25.0;
+
+import CompactStandardLibrary;
+
+export circuit hashBytes0(value: Bytes<0>): Bytes<32> {
+    return disclose(keccak256<Bytes<0>>(value));
+}
+
+export circuit hashBytes1(value: Bytes<1>): Bytes<32> {
+    return disclose(keccak256<Bytes<1>>(value));
+}
+
+export circuit hashBytes2(value: Bytes<2>): Bytes<32> {
+    return disclose(keccak256<Bytes<2>>(value));
+}
+
+export circuit hashBytes4(value: Bytes<4>): Bytes<32> {
+    return disclose(keccak256<Bytes<4>>(value));
+}
+
+export circuit hashBytes5(value: Bytes<5>): Bytes<32> {
+    return disclose(keccak256<Bytes<5>>(value));
+}
+
+export circuit hashBytes10(value: Bytes<10>): Bytes<32> {
+    return disclose(keccak256<Bytes<10>>(value));
+}
+
+export circuit hashBytes18(value: Bytes<18>): Bytes<32> {
+    return disclose(keccak256<Bytes<18>>(value));
+}
