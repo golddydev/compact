@@ -13,11 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { concatBytes, numberToBytesLE } from '@noble/curves/utils.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { runKat, toHex } from '@test/crypto';
+import { runKat } from '@test/crypto';
 
 // The encoding, not the hash core, is what this fixture pins -- which is exactly
 // the part @noble/hashes cannot answer for itself, since the reference digests
@@ -25,30 +27,12 @@ import { runKat, toHex } from '@test/crypto';
 
 /** A `Field` atom: 32 bytes, little-endian, zero-padded, never trimmed. */
 function fieldToKeccakInput(value: bigint): Uint8Array {
-    if (value < 0n) {
-        throw new Error(`Field must be non-negative, got ${value}`);
-    }
-
-    const bytes = new Uint8Array(32);
-    let remaining = value;
-    let index = 0;
-
-    while (remaining > 0n) {
-        bytes[index] = Number(remaining & 0xffn);
-        remaining >>= 8n;
-        index += 1;
-    }
-
-    return bytes;
+    return numberToBytesLE(value, 32);
 }
 
 /** A `Vector<3, Field>`: the three 32-byte encodings concatenated, 96 bytes. */
 function vector3ToKeccakInput(values: readonly bigint[]): Uint8Array {
-    const out = new Uint8Array(96);
-
-    values.forEach((value, i) => out.set(fieldToKeccakInput(value), i * 32));
-
-    return out;
+    return concatBytes(...values.map(fieldToKeccakInput));
 }
 
 // The empty-input digest, used below as a NEGATIVE control.
@@ -84,8 +68,10 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             fieldVectors,
             (vector) => `Field ${vector.label}`,
             ({ label, value }) => {
-                const expected = toHex(keccak_256(fieldToKeccakInput(value)));
-                const actual = toHex(pure.hashField(value));
+                const expected = bytesToHex(
+                    keccak_256(fieldToKeccakInput(value)),
+                );
+                const actual = bytesToHex(pure.hashField(value));
 
                 if (actual !== expected) {
                     throw new Error(
@@ -101,10 +87,10 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             vector3Vectors,
             (vector) => `Vector<3, Field> ${vector.label}`,
             ({ label, values }) => {
-                const expected = toHex(
+                const expected = bytesToHex(
                     keccak_256(vector3ToKeccakInput(values)),
                 );
-                const actual = toHex(
+                const actual = bytesToHex(
                     pure.hashVector3(values as [bigint, bigint, bigint]),
                 );
 
@@ -118,7 +104,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
 
         // A `Field` is framed at a full 32 bytes, so `Field` 0 hashes 32 zero
         // bytes. Under a trimmed encoding it would collapse to the empty input.
-        const zeroField = toHex(pure.hashField(0n));
+        const zeroField = bytesToHex(pure.hashField(0n));
 
         if (zeroField === EMPTY_DIGEST) {
             throw new Error(
@@ -130,8 +116,8 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
         // Each element occupies its own 32-byte block, so there is no
         // cross-element framing collision: under a trimmed encoding both of
         // these would flatten to 0x01 0x02 0x03.
-        const framed = toHex(pure.hashVector3([1n, 2n, 3n]));
-        const reframed = toHex(pure.hashVector3([0x030201n, 0n, 0n]));
+        const framed = bytesToHex(pure.hashVector3([1n, 2n, 3n]));
+        const reframed = bytesToHex(pure.hashVector3([0x030201n, 0n, 0n]));
 
         if (framed === reframed) {
             throw new Error(

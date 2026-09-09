@@ -23,8 +23,6 @@
  * runtime under test.
  */
 
-export { fromHex, toHex } from './hex.ts';
-
 export {
     buildReport,
     formatFailure,
@@ -50,30 +48,29 @@ export {
     type LengthVector,
 } from './vectors.ts';
 
+export { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
+
 export {
-    assertBitcoinCoverage,
-    classifyBitcoinVectors,
-    isScalarRangeRejection,
-    loadBitcoinTestVectors,
+    assertCoverage,
+    classifyEcdsa,
+    loadCorpus,
     parseUncompressedPublicKey,
     rawEcdsaVerify,
-    runWycheproofKat,
-    strictParseEcdsaDer,
-    BITCOIN_CORPUS_COVERAGE,
-    DerParseError,
-    IDENTITY_ABORT_MESSAGE,
+    runCorpusKat,
+    runEcdsaKat,
     IDENTITY_POINT,
-    VECTORS_FILENAME,
-    type ClassifiedVectors,
+    SECP256K1_BITCOIN,
+    type Classified,
+    type CorpusRoot,
+    type CorpusTest,
+    type Coverage,
     type DrivenVector,
     type EcdsaScalars,
-    type Secp256k1Point,
-    type WycheproofDriver,
-    type WycheproofGroup,
-    type WycheproofResult,
-    type WycheproofRoot,
-    type WycheproofTest,
-} from './wycheproof.ts';
+    type EcdsaSuite,
+    type EcdsaVector,
+    type Excluded,
+    type Expectation,
+} from './wycheproof/index.ts';
 
 export {
     loadAddressVectors,

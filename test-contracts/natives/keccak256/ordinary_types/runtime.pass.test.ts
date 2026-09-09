@@ -13,17 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { expect } from 'vitest';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { runKat, toHex } from '@test/crypto';
+import { runKat } from '@test/crypto';
 
 // Shape, determinism and distinctness across every ordinary type family. These
 // are properties the circuit must satisfy on its own terms, so no oracle is
 // involved -- encoding correctness for the field-element types is
 // ../field_types, and digest correctness is ../known_vectors.
-const probes: { name: keyof PureCircuits; a: unknown; b: unknown }[] = [
+const probes: { name: string; a: unknown; b: unknown }[] = [
     { name: 'hashField', a: 0n, b: 123456789n },
     {
         name: 'hashBytes32',
@@ -52,7 +53,9 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             probes,
             (probe) => probe.name,
             ({ name, a, b }) => {
-                const circuit = pure[name] as (value: unknown) => Uint8Array;
+                const circuit = (pure as Record<string, unknown>)[name] as (
+                    value: unknown,
+                ) => Uint8Array;
                 const first = circuit(a);
                 const repeat = circuit(a);
                 const other = circuit(b);
@@ -68,15 +71,15 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                     ).toHaveLength(32);
                 }
 
-                if (toHex(first) !== toHex(repeat)) {
+                if (bytesToHex(first) !== bytesToHex(repeat)) {
                     throw new Error(
                         `${name} is not deterministic: the same input gave different digests`,
                     );
                 }
 
-                if (toHex(first) === toHex(other)) {
+                if (bytesToHex(first) === bytesToHex(other)) {
                     throw new Error(
-                        `${name}: distinct inputs produced the same digest 0x${toHex(first)}`,
+                        `${name}: distinct inputs produced the same digest 0x${bytesToHex(first)}`,
                     );
                 }
             },

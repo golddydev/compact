@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { Secp256k1Point } from '@midnight-ntwrk/compact-runtime';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
-
-import { fromHex, toHex } from './hex.ts';
-import type { Secp256k1Point } from './wycheproof.ts';
 
 /**
  * The canonical `ethereum/tests` key-to-address vectors vendored under `./data`.
@@ -59,14 +58,11 @@ const dataDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'data');
 
 /** The affine public key for a 32-byte private scalar, given as hex. */
 export function pubkeyPoint(privHex: string): Secp256k1Point {
-    // 04 ‖ x_be ‖ y_be
-    const uncompressed = secp256k1.getPublicKey(fromHex(privHex), false);
+    const { x, y } = secp256k1.Point.fromBytes(
+        secp256k1.getPublicKey(hexToBytes(privHex), false),
+    ).toAffine();
 
-    return {
-        x: BigInt(`0x${toHex(uncompressed.slice(1, 33))}`),
-        y: BigInt(`0x${toHex(uncompressed.slice(33, 65))}`),
-        identity: false,
-    };
+    return { x, y, identity: false };
 }
 
 /** Loads the vendored key-to-address vectors, deriving each public key point. */

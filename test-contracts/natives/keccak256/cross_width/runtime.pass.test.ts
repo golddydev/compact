@@ -13,16 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { fillerBytes, runKat, toHex, widthCircuit } from '@test/crypto';
+import { fillerBytes, runKat, widthCircuit } from '@test/crypto';
 
 // The cross-width consequence of no-trim: `hashBytes<wide>(x ++ 0x00...)` must
-// DIFFER from `hashBytes<narrow>(x)`, because the padding zeros are hashed and
-// the declared width stays visible. The legacy trim erased the width and
-// collided the two, so the collision check is the point of the fixture.
+// DIFFER from `hashBytes<narrow>(x)`.
 const pairs = [
     { wide: 33, narrow: 32, note: 'one padding zero' },
     {
@@ -47,10 +46,12 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                 const padded = new Uint8Array(wide);
                 padded.set(prefix);
 
-                const wideDigest = toHex(widthCircuit(pure, wide)(padded));
-                const narrowDigest = toHex(widthCircuit(pure, narrow)(prefix));
-                const wideReference = toHex(keccak_256(padded));
-                const narrowReference = toHex(keccak_256(prefix));
+                const wideDigest = bytesToHex(widthCircuit(pure, wide)(padded));
+                const narrowDigest = bytesToHex(
+                    widthCircuit(pure, narrow)(prefix),
+                );
+                const wideReference = bytesToHex(keccak_256(padded));
+                const narrowReference = bytesToHex(keccak_256(prefix));
 
                 if (narrowDigest !== narrowReference) {
                     throw new Error(

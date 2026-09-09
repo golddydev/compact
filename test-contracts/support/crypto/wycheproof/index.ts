@@ -13,10 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { defineCompileTest } from '@test/compact-test';
+export {
+    assertCoverage,
+    loadCorpus,
+    runCorpusKat,
+    type Classified,
+    type CorpusResult,
+    type CorpusRoot,
+    type CorpusTest,
+    type Coverage,
+    type DrivenVector,
+    type Excluded,
+    type Expectation,
+} from './corpus.ts';
 
-export default defineCompileTest(import.meta.url, {
-    compilerArgs: ['--feature-zkir-v3'],
-    expectedError:
-        /expected argument 'value' type to be an ordinary Compact type but received ADT type Counter/,
-});
+export {
+    classifyEcdsa,
+    parseUncompressedPublicKey,
+    rawEcdsaVerify,
+    runEcdsaKat,
+    IDENTITY_POINT,
+    SECP256K1_BITCOIN,
+    type EcdsaGroup,
+    type EcdsaScalars,
+    type EcdsaSuite,
+    type EcdsaVector,
+} from './ecdsa.ts';

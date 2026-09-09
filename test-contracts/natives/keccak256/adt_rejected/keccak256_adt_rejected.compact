@@ -16,10 +16,7 @@
 // keccak256 rejects ADT (ledger) types: hashing a `Counter` is a type error.
 //
 // Compiled WITH `--feature-zkir-v3` on purpose. Reading the ledger makes the
-// circuit provable, so without the flag the zkir-v2 keccak256 gate would fire
-// first (../impure_without_v3) and this fixture would pass for the wrong
-// reason. The flag removes that gate, leaving the ADT type error as the only
-// way to fail.
+// circuit provable
 
 pragma language_version >= 0.25.0;
 

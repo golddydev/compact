@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { loadAddressVectors, runKat, toHex } from '@test/crypto';
+import { loadAddressVectors, runKat } from '@test/crypto';
 
 // The stdlib `secp256k1EthereumAddress` held to the canonical `ethereum/tests`
 // key-to-address vectors. The circuit computes keccak256(x_be || y_be)[12:32),
@@ -46,7 +47,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                     );
                 }
 
-                const actual = `0x${toHex(address)}`;
+                const actual = `0x${bytesToHex(address)}`;
 
                 if (actual !== ethAddr) {
                     throw new Error(

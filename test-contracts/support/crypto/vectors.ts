@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { fromHex, toHex } from './hex.ts';
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
 /**
  * Digest vectors over a sweep of `Bytes<N>` widths, shared by the keccak256 and
@@ -65,7 +65,7 @@ export const packingWidths: readonly number[] = [
     94,
 ];
 
-/** Widths past the packing sweep: a real-world size and a multi-block input. */
+/** a real-world size and a multi-block input. */
 export const largeWidths: readonly number[] = [376, 1024];
 
 /** Every width the shared `multi_length` contracts are expected to export. */
@@ -77,11 +77,7 @@ export const sweepWidths: readonly number[] = [
 /**
  * The deterministic filler: `byte i = (i % 255) + 1`.
  *
- * Every byte is nonzero, which matters for `persistentHash`: a `Bytes<N>` is
- * serialized with its trailing `0x00` run trimmed (`CompactTypeBytes.toValue`),
- * so an all-nonzero input hashes the same N bytes off-circuit and in-circuit
- * without depending on how the trim is undone. Fixtures that mean to exercise
- * the trailing-zero behaviour build their inputs directly instead.
+ * Every byte is nonzero.
  */
 export function fillerBytes(length: number): Uint8Array {
     return Uint8Array.from({ length }, (_unused, index) => (index % 255) + 1);
@@ -90,7 +86,7 @@ export function fillerBytes(length: number): Uint8Array {
 /**
  * Builds a vector whose expected digest is COMPUTED by `digest`.
  *
- * Sound for `persistentHash`; for `keccak256` see the oracle note above.
+ * Used for `persistentHash`.
  */
 export function computed(
     digest: DigestFn,
@@ -98,8 +94,8 @@ export function computed(
     label?: string,
 ): LengthVector {
     const vector: LengthVector = {
-        input: toHex(input),
-        digest: toHex(digest(input)),
+        input: bytesToHex(input),
+        digest: bytesToHex(digest(input)),
     };
 
     if (label !== undefined) {
@@ -119,8 +115,8 @@ export function pinned(
     digest: string,
     label?: string,
 ): LengthVector {
-    const bytes = typeof input === 'string' ? fromHex(input) : input;
-    const vector: LengthVector = { input: toHex(bytes), digest };
+    const bytes = typeof input === 'string' ? hexToBytes(input) : input;
+    const vector: LengthVector = { input: bytesToHex(bytes), digest };
 
     if (label !== undefined) {
         vector.label = label;
@@ -182,17 +178,17 @@ export function checkWidthVector(
 ): void {
     const width = vectorWidth(vector);
     const circuit = widthCircuit(pureCircuits, width);
-    const actual = circuit(fromHex(vector.input));
+    const actual = circuit(hexToBytes(vector.input));
 
-    if (!(actual instanceof Uint8Array) || actual.length !== 32) {
+    if (!(actual instanceof Uint8Array)) {
         throw new Error(
-            `hashBytes${width} did not return a 32-byte digest (got ${String(actual)})`,
+            `hashBytes${width} did not return Uint8Array (got ${String(actual)})`,
         );
     }
 
-    if (toHex(actual) !== vector.digest) {
+    if (bytesToHex(actual) !== vector.digest) {
         throw new Error(
-            `hashBytes${width} = 0x${toHex(actual)}, expected 0x${vector.digest}`,
+            `hashBytes${width} = 0x${bytesToHex(actual)}, expected 0x${vector.digest}`,
         );
     }
 }

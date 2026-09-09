@@ -16,69 +16,60 @@
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import {
-    assertBitcoinCoverage,
-    classifyBitcoinVectors,
-    isScalarRangeRejection,
-    runWycheproofKat,
-    type DrivenVector,
+    assertCoverage,
+    runEcdsaKat,
+    SECP256K1_BITCOIN,
+    type EcdsaVector,
 } from '@test/crypto';
 
-// The full Bitcoin flow over the same corpus: SHA-256 in-circuit via
-// `persistentHash`, then verify. Where ../ecdsa_verify isolates the curve
-// arithmetic behind a pre-hashed digest, this drives hashing and verification
-// together from the raw message -- so a divergence in either shows up.
-//
-// Routing is by message length, because `Bytes<N>` is fixed-size and SHA-256
-// padding depends on the exact length. A length with no circuit is reported by
-// name, so a corpus refresh that introduces one fails loudly instead of quietly
-// covering less than it claims.
-function drive(pure: PureCircuits, vector: DrivenVector): boolean {
-    const name = `proveBitcoin${vector.msg.length}` as keyof PureCircuits;
-    const circuit = pure[name] as
+function drive(pure: PureCircuits, vector: EcdsaVector): boolean {
+    const name = `proveBitcoin${vector.msg.length}`;
+    const circuit = (pure as Record<string, unknown>)[name] as
         | ((msg: Uint8Array, sig: unknown, pk: unknown) => boolean)
         | undefined;
 
     if (typeof circuit !== 'function') {
         throw new Error(
-            `no ${name} circuit for tcId ${vector.tcId}; add a circuit for each ` +
-                'message length in the corpus',
+            `no ${name} circuit for tcId ${vector.tcId}; add one for each message length`,
         );
     }
 
-    try {
-        return circuit(vector.msg, vector.sig, vector.pk);
-    } catch (error) {
-        if (isScalarRangeRejection(error)) {
-            return false;
-        }
+    // Out-of-range r/s never reach the circuit: the argument type-check
+    // rejects them, which for a caller just means an invalid signature.
+    return vector.scalarsInRange && circuit(vector.msg, vector.sig, vector.pk);
+}
 
-        throw error;
+/** `10B=42, 20B=17, ...` — which message lengths the corpus exercises. */
+function lengthBreakdown(vectors: readonly EcdsaVector[]): string {
+    const byLength = new Map<number, number>();
+
+    for (const vector of vectors) {
+        byLength.set(
+            vector.msg.length,
+            (byLength.get(vector.msg.length) ?? 0) + 1,
+        );
     }
+
+    return [...byLength.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([length, count]) => `${length}B=${count}`)
+        .join(', ');
 }
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(
     import.meta.url,
     (_Contract, pure) => {
-        const byLength = new Map<number, number>();
+        const classified = runEcdsaKat(
+            SECP256K1_BITCOIN,
+            'Bitcoin flow (SHA-256 in-circuit + verify)',
+            (vector) => drive(pure, vector),
+            ({ driven }) => [`by msg length: ${lengthBreakdown(driven)}`],
+        );
 
-        for (const vector of classifyBitcoinVectors().driven) {
-            byLength.set(
-                vector.msg.length,
-                (byLength.get(vector.msg.length) ?? 0) + 1,
-            );
-        }
-
-        const lengths = [...byLength.entries()]
-            .sort(([a], [b]) => a - b)
-            .map(([length, count]) => `${length}B=${count}`)
-            .join(', ');
-
-        assertBitcoinCoverage(
-            runWycheproofKat(
-                'secp256k1 Bitcoin flow (SHA-256 in-circuit + verify)',
-                (vector) => drive(pure, vector),
-                [`by msg length:         ${lengths}`],
-            ),
+        assertCoverage(
+            SECP256K1_BITCOIN.name,
+            classified,
+            SECP256K1_BITCOIN.coverage,
         );
     },
 );

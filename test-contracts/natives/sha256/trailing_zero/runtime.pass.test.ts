@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { runKat, toHex } from '@test/crypto';
+import { runKat } from '@test/crypto';
 
 // `persistentHash<Bytes<12>>` hashes all twelve bytes, trailing 0x00 included --
 // the same guarantee keccak256 gives, reached by a different route: the trimmed
@@ -72,7 +73,7 @@ function trimmedDigest(input: Uint8Array): string | undefined {
 
     return end === input.length
         ? undefined
-        : toHex(sha256(input.slice(0, end)));
+        : bytesToHex(sha256(input.slice(0, end)));
 }
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(
@@ -83,7 +84,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             inputs,
             (vector) => vector.label,
             ({ label, input }) => {
-                const expected = toHex(sha256(input));
+                const expected = bytesToHex(sha256(input));
                 const trimmed = trimmedDigest(input);
 
                 if (trimmed === expected) {
@@ -93,7 +94,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                     );
                 }
 
-                const actual = toHex(pure.hashBytes12(input));
+                const actual = bytesToHex(pure.hashBytes12(input));
 
                 if (actual !== expected) {
                     const diagnosis =

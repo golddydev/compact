@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { runKat, toHex } from '@test/crypto';
+import { runKat } from '@test/crypto';
 
 // `keccak256<Bytes<12>>` must hash all twelve bytes whatever the trailing-byte
 // pattern. Each vector is checked against Keccak-256 of the FULL input, and the
@@ -93,7 +94,7 @@ function legacyTrimmedDigest(input: Uint8Array): string | undefined {
 
     return end === input.length
         ? undefined
-        : toHex(keccak_256(input.slice(0, end)));
+        : bytesToHex(keccak_256(input.slice(0, end)));
 }
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(
@@ -104,7 +105,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             vectors,
             (vector) => vector.label,
             ({ label, input, pinned }) => {
-                const expected = toHex(keccak_256(input));
+                const expected = bytesToHex(keccak_256(input));
 
                 if (pinned !== undefined && expected !== pinned) {
                     throw new Error(
@@ -122,7 +123,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                     );
                 }
 
-                const actual = toHex(pure.hashBytes12(input));
+                const actual = bytesToHex(pure.hashBytes12(input));
 
                 if (actual !== expected) {
                     const diagnosis =

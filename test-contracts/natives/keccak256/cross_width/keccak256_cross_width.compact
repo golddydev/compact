@@ -15,14 +15,7 @@
 
 // The observable consequence of the no-trim behaviour across widths: a
 // `Bytes<N>` holding a zero-padded copy of a narrower `Bytes<M>` hashes
-// DIFFERENTLY, because the padding zeros are hashed and the declared width
-// stays visible in the digest. The legacy trim erased the width and made the
-// two collide.
-//
-// The widths are exactly the pairs the runtime test compares -- (33, 32) for a
-// single padding zero, (63, 32) across the 2x31 packing boundary, (33, 1) for
-// a 32-byte pad, and (94, 93) on the 3x31 straddle -- rather than the whole
-// sweep, which is ../multi_length. Pure, so no `--feature-zkir-v3`.
+// DIFFERENTLY.
 
 pragma language_version >= 0.25.0;
 

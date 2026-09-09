@@ -11,9 +11,13 @@ Shared helpers for the `natives/keccak256`, `natives/secp256k1` and
 fixture: this directory holds no `.compact` file and no `*.test.ts`, so fixture
 discovery walks past it.
 
+Hex conversion, byte concatenation and number encoding come from
+`@noble/hashes/utils.js` and `@noble/curves/utils.js` rather than being written
+here; `@test/crypto` re-exports `bytesToHex` / `hexToBytes` so fixtures have one
+import surface.
+
 | module           | what it provides                                                             |
 | ---------------- | ---------------------------------------------------------------------------- |
-| `hex.ts`         | `toHex` / `fromHex`                                                          |
 | `kat.ts`         | `runKat` — runs every vector, then fails once with an aggregated message     |
 | `vectors.ts`     | the `Bytes<N>` width sweep both hash features share, plus `checkWidthVector` |
 | `wycheproof.ts`  | Wycheproof loader, strict DER parser, vector classifier, `runWycheproofKat`  |
@@ -69,13 +73,12 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
 
 ## Pinned corpus coverage
 
-`runWycheproofKat` reports its bucket split only when something fails, so the
-two secp256k1 fixtures also call `assertBitcoinCoverage`, which pins the split
-itself: 463 vectors, 226 driven, 235 skipped for encoding, 2 carved for
-malleability, 5 expecting an identity abort. Coverage that is invisible while
-green can erode silently -- a corpus refresh, or a stricter DER parser, would
-shrink `driven` while every remaining vector still passed. With the pin that
-becomes a failure you have to update deliberately, next to the checksums in
+`runEcdsaKat` reports its bucket split only when something fails, so the two
+secp256k1 fixtures also call `assertCoverage`, which pins the split: 463
+vectors, 244 driven, 217 excluded for encoding, 2 for malleability. Coverage
+that is invisible while green can erode silently -- a corpus refresh, or a
+stricter signature decoder, would shrink `driven` while every remaining vector
+still passed. The pin makes that an explicit update, next to the checksums in
 `data/README.md`.
 
 ## The fixtures

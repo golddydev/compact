@@ -13,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { bytesToHex } from '@noble/hashes/utils.js';
 import { expect } from 'vitest';
 
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
-import { runKat, toHex } from '@test/crypto';
+import { runKat } from '@test/crypto';
 
 // Types whose chunks concatenate to the same bytes must hash identically, so
 // this needs no external oracle -- it compares the three circuits to each other.
@@ -45,7 +46,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
         runKat(
             'keccak256 flatten equivalence',
             inputs,
-            (bytes) => `0x${toHex(bytes)}`,
+            (bytes) => `0x${bytesToHex(bytes)}`,
             (bytes) => {
                 // The same 12 bytes, sliced along different field boundaries.
                 const digests = {
@@ -69,12 +70,12 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                     ).toHaveLength(32);
                 }
 
-                const reference = toHex(digests['Bytes<12>']);
+                const reference = bytesToHex(digests['Bytes<12>']);
 
                 for (const [shape, digest] of Object.entries(digests)) {
-                    if (toHex(digest) !== reference) {
+                    if (bytesToHex(digest) !== reference) {
                         throw new Error(
-                            `keccak256<${shape}> = 0x${toHex(digest)}, but ` +
+                            `keccak256<${shape}> = 0x${bytesToHex(digest)}, but ` +
                                 `keccak256<Bytes<12>> = 0x${reference}; types that flatten ` +
                                 'to the same bytes must hash equally',
                         );

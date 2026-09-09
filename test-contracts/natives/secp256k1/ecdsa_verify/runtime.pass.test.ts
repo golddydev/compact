@@ -18,79 +18,73 @@ import { secp256k1EcdsaRecover } from '@midnight-ntwrk/compact-runtime';
 import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import {
-    assertBitcoinCoverage,
-    classifyBitcoinVectors,
-    isScalarRangeRejection,
-    runWycheproofKat,
-    type DrivenVector,
+    assertCoverage,
+    runEcdsaKat,
+    SECP256K1_BITCOIN,
+    type EcdsaVector,
 } from '@test/crypto';
 
-// Two things, over the vendored Project Wycheproof secp256k1 / SHA-256 Bitcoin
-// corpus (463 vectors; see support/crypto/data/README.md).
+// Two things over the Wycheproof corpus (see support/crypto/data/README.md).
 //
-// 1. The KAT proper: drive `verifyEcdsa` with a digest hashed off-circuit, so
-//    the only thing under test is the curve and scalar arithmetic. Each driven
-//    verdict is backed by BOTH Wycheproof's curated result and @noble/curves'
-//    raw ECDSA check. That reference is genuinely independent here: the ECDSA
-//    equations live in Compact (`compiler/zkir-v3-library.compact`), so only the
-//    field arithmetic underneath is shared.
+// 1. The KAT: drive `verifyEcdsa` with an off-circuit digest, so only the curve
+//    arithmetic is under test. Every expectation is backed by both the corpus
+//    verdict and @noble/curves' raw check, which is independent here because the
+//    ECDSA equations live in Compact.
 //
-// 2. The recovery round trip. `secp256k1EcdsaRecover` is not a circuit on this
-//    toolchain -- the stdlib documents recovering off-circuit and verifying the
-//    recovered key in-circuit (the EIP-1271 pattern). That is exactly what this
-//    does, so the documented flow has coverage rather than being prose only.
+// 2. The recovery round trip. `secp256k1EcdsaRecover` is not a circuit; the
+//    stdlib says to recover off-circuit and verify the key in-circuit, so that
+//    documented flow gets covered rather than only described.
 
-/** The runtime's `Secp256k1Scalar` type-check rejects r/s outside [0, n). */
-function drive(pure: PureCircuits, vector: DrivenVector): boolean {
-    try {
-        return pure.verifyEcdsa(vector.e, vector.sig, vector.pk);
-    } catch (error) {
-        if (isScalarRangeRejection(error)) {
-            return false;
-        }
-
-        throw error;
-    }
+// Out-of-range r/s never reach the circuit: the argument type-check rejects
+// them, which for a caller just means an invalid signature.
+function drive(pure: PureCircuits, vector: EcdsaVector): boolean {
+    return (
+        vector.scalarsInRange &&
+        pure.verifyEcdsa(vector.e, vector.sig, vector.pk)
+    );
 }
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(
     import.meta.url,
     (_Contract, pure) => {
-        assertBitcoinCoverage(
-            runWycheproofKat(
-                'secp256k1EcdsaVerify (pre-hashed digest)',
-                (vector) => drive(pure, vector),
-            ),
+        const classified = runEcdsaKat(
+            SECP256K1_BITCOIN,
+            'verifyEcdsa (pre-hashed digest)',
+            (vector) => drive(pure, vector),
         );
 
-        // Recover off-circuit, verify in-circuit. A valid signature has two
-        // candidate recovery ids; the recovered key only has to verify, which is
-        // the property the documented flow actually relies on.
-        const valid = classifyBitcoinVectors().driven.filter(
-            (vector) => vector.expectedValid && !vector.expectsIdentityAbort,
+        assertCoverage(
+            SECP256K1_BITCOIN.name,
+            classified,
+            SECP256K1_BITCOIN.coverage,
+        );
+
+        const valid = classified.driven.filter(
+            (vector) => vector.expectation === 'valid',
         );
 
         if (valid.length === 0) {
             throw new Error(
-                'no valid Wycheproof vectors to drive the recovery round trip',
+                'no valid vectors to drive the recovery round trip',
             );
         }
 
+        // A valid signature has more than one candidate recovery id; the
+        // recovered key only has to verify.
         const roundTripped = valid.filter((vector) =>
             [0, 1, 2, 3].some((recoveryId) => {
-                let recovered;
-
                 try {
-                    recovered = secp256k1EcdsaRecover(
-                        vector.e,
-                        vector.sig,
-                        recoveryId,
-                    );
+                    return drive(pure, {
+                        ...vector,
+                        pk: secp256k1EcdsaRecover(
+                            vector.e,
+                            vector.sig,
+                            recoveryId,
+                        ),
+                    });
                 } catch {
                     return false;
                 }
-
-                return drive(pure, { ...vector, pk: recovered });
             }),
         );
 
@@ -102,8 +96,8 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
                 .join(', ');
 
             throw new Error(
-                `recovery round trip: ${roundTripped.length}/${valid.length} valid ` +
-                    `signatures produced a key that verifies in-circuit. Missed: ${missed}`,
+                `recovery round trip: ${roundTripped.length}/${valid.length} valid signatures ` +
+                    `produced a key that verifies in-circuit. Missed: ${missed}`,
             );
         }
     },
