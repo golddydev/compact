@@ -28,7 +28,7 @@ const dataDir = path.join(
     'data',
 );
 
-export type CorpusResult = 'valid' | 'invalid';
+type CorpusResult = 'valid' | 'invalid';
 
 /** One test case. Every Wycheproof verify schema shares these fields. */
 export type CorpusTest = {

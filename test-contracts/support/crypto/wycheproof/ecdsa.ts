@@ -40,14 +40,14 @@ import {
 // this module DER-decodes each signature, decodes the key, and precomputes the
 // digest. Vectors it cannot ask the circuit about are excluded by reason.
 
-export type EcdsaGroup = {
+type EcdsaGroup = {
     type: string;
     publicKey: { uncompressed: string; wx: string; wy: string };
     sha?: string;
     tests: CorpusTest[];
 };
 
-export type EcdsaSuite = {
+type EcdsaSuite = {
     /** Short identity for reports. */
     name: string;
     vectorsFile: string;
@@ -87,13 +87,17 @@ export const SECP256K1_BITCOIN: EcdsaSuite = {
     },
 };
 
-export type EcdsaScalars = {
+type EcdsaScalars = {
     r: bigint;
     s: bigint;
 };
 
-/** The point at infinity, as the runtime spells it. */
-export const IDENTITY_POINT: Secp256k1Point = {
+/**
+ * The point at infinity, as the runtime spells it. Weierstrass-only: affine
+ * coordinates cannot express it, hence the flag. Edwards curves have no such
+ * case, so this stays private to this module.
+ */
+const IDENTITY_POINT: Secp256k1Point = {
     x: 0n,
     y: 0n,
     identity: true,
@@ -129,7 +133,7 @@ function decodeSignature(sigHex: string): EcdsaScalars | undefined {
  * Decode a SEC1 key. `00` is the point at infinity; otherwise
  * `04 || wx || wy`. The all-zero pair is how the runtime spells the identity.
  */
-export function parseUncompressedPublicKey(
+function parseUncompressedPublicKey(
     suite: EcdsaSuite,
     uncompressed: string,
 ): Secp256k1Point {
@@ -161,7 +165,7 @@ export function parseUncompressedPublicKey(
  * The raw ECDSA verdict from @noble, with low-s disabled. Independent of the
  * circuit: the ECDSA equations live in Compact, only field arithmetic is shared.
  */
-export function rawEcdsaVerify(
+function rawEcdsaVerify(
     suite: EcdsaSuite,
     e: Uint8Array,
     { r, s }: EcdsaScalars,
@@ -194,7 +198,7 @@ export function rawEcdsaVerify(
  * the raw verdict disagrees with the corpus because of low-s. Any other
  * disagreement throws: it would mean noble and the corpus genuinely differ.
  */
-export function classifyEcdsa(suite: EcdsaSuite): Classified<EcdsaVector> {
+function classifyEcdsa(suite: EcdsaSuite): Classified<EcdsaVector> {
     const root = loadCorpus<CorpusRoot<EcdsaGroup>>(suite.vectorsFile);
     const order = suite.curve.Point.Fn.ORDER;
     const driven: EcdsaVector[] = [];

@@ -18,7 +18,6 @@ export {
     loadCorpus,
     runCorpusKat,
     type Classified,
-    type CorpusResult,
     type CorpusRoot,
     type CorpusTest,
     type Coverage,
@@ -27,15 +26,4 @@ export {
     type Expectation,
 } from './corpus.ts';
 
-export {
-    classifyEcdsa,
-    parseUncompressedPublicKey,
-    rawEcdsaVerify,
-    runEcdsaKat,
-    IDENTITY_POINT,
-    SECP256K1_BITCOIN,
-    type EcdsaGroup,
-    type EcdsaScalars,
-    type EcdsaSuite,
-    type EcdsaVector,
-} from './ecdsa.ts';
+export { runEcdsaKat, SECP256K1_BITCOIN, type EcdsaVector } from './ecdsa.ts';
