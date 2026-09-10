@@ -291,7 +291,7 @@ const harness: Grammar = {
         contract('export ', 'witness_declaration'),
         contract('witness_declaration'),
     ],
-        ledger_statements: [
+    ledger_statements: [
         ['import CompactStandardLibrary;', 'line_separator', 'optional_modifier', ' ledger ', 'random_string', ': ', 'compact_types', 'end_line'],
     ],
     module_statements: [['module_statement']],
@@ -699,7 +699,7 @@ const types: Grammar = {
  * ================================================================== */
 
 const declarations: Grammar = {
-        pragma_constraints: [
+    pragma_constraints: [
         ['pragma_constraint'],
         ['pragma_constraints', ' ', 'random_operator', ' ', 'pragma_constraint'],
     ],
@@ -733,7 +733,7 @@ const declarations: Grammar = {
         ['random_string', ' include ', 'include_file', 'end_line'],
         ['include ', 'include_file', 'end_line'],
     ],
-        include_file: [
+    include_file: [
         ['CompactStandardLibrary'],
         ['path/to/file'],
         ['//path//to//file'],
@@ -831,8 +831,8 @@ const declarations: Grammar = {
         ['random_string', ' : ', 'constructor_param_types', ', ', 'constructor_params'],
     ],
     constructor_param_types: identifierPosition([['compact_types']]),
-        invalid_circuit_modifier: [['random_keyword'], ['random_string']],
-        valid_circuit_modifier: [[''], ['export '], ['pure '], ['export pure ']],
+    invalid_circuit_modifier: [['random_keyword'], ['random_string']],
+    valid_circuit_modifier: [[''], ['export '], ['pure '], ['export pure ']],
     circuit_declaration: [
         ['circuit ', 'random_string', '(): ', 'contaminated_compact_types', 'end_line'],
         ['circuit ', 'random_keyword', '(): ', 'contaminated_compact_types', 'end_line'],
@@ -865,26 +865,26 @@ const statements: Grammar = {
     constructor_return_statements: returnStatements('constructor_return_statements'),
     circuit_return_statements: returnStatements('circuit_return_statements'),
     circuit_spread_statements: [
-        ['const a', ' = [...slice<', 'random_number', '>(', 'valid_types' , ', ', 'random_number', ')]', 'end_line'],
-        ['const [', 'valid_types', ', ', 'valid_types', '] = ', '[...', 'valid_types', ', ', '...', 'valid_types', ']', 'end_line' ],
-        ['const a', ' = [...', 'random_string', ', ...', 'random_number', ']', 'end_line' ],
-        ['const a', ' = [...[', 'random_string', '], ...[', 'random_number', ']]', 'end_line' ],
-        ['const a', ' = [...', 'random_table', ', ...', 'random_mixed_table', ']', 'end_line' ],
-        ['const a', ' = [...[', 'random_table', '], ...[', 'random_mixed_table', ']]', 'end_line' ],
+        ['const a', ' = [...slice<', 'random_number', '>(', 'valid_types', ', ', 'random_number', ')]', 'end_line'],
+        ['const [', 'valid_types', ', ', 'valid_types', '] = ', '[...', 'valid_types', ', ', '...', 'valid_types', ']', 'end_line'],
+        ['const a', ' = [...', 'random_string', ', ...', 'random_number', ']', 'end_line'],
+        ['const a', ' = [...[', 'random_string', '], ...[', 'random_number', ']]', 'end_line'],
+        ['const a', ' = [...', 'random_table', ', ...', 'random_mixed_table', ']', 'end_line'],
+        ['const a', ' = [...[', 'random_table', '], ...[', 'random_mixed_table', ']]', 'end_line'],
     ],
     circuit_multi_const_statements: [
-        ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ' = ', 'random_number', ', ', 'random_string', ' = ', 'random_mixed_table', 'end_line'],
-        ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ' = ', 'small_random_number', ', ', 'random_string', ' = ', 'random_keyword', 'end_line'],
-        ['const ', 'random_string', ':', 'valid_types', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ':', 'valid_types', ' = ', 'random_number', ', ', 'random_string', ':', 'valid_types', ' = ', 'random_keyword', 'end_line'],
+        ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ', 'random_string', ' = ', 'random_number', ', ', 'random_string', ' = ', 'random_mixed_table', 'end_line'],
+        ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ', 'random_string', ' = ', 'small_random_number', ', ', 'random_string', ' = ', 'random_keyword', 'end_line'],
+        ['const ', 'random_string', ':', 'valid_types', ' = ', 'default<', 'valid_types', '>', ', ', 'random_string', ':', 'valid_types', ' = ', 'random_number', ', ', 'random_string', ':', 'valid_types', ' = ', 'random_keyword', 'end_line'],
     ],
     circuit_multi_const_statements_struct: [
-        ['const ', 'random_string', ' = ', 'default<', 'var_struct', '>', ', ' , 'random_string', ' = ', 'random_string', ', ', 'random_string', ' = ', 'random_number', 'end_line'],
+        ['const ', 'random_string', ' = ', 'default<', 'var_struct', '>', ', ', 'random_string', ' = ', 'random_string', ', ', 'random_string', ' = ', 'random_number', 'end_line'],
     ],
     circuit_map_fold_statements: [
-        ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'valid_types' , ')', 'valid_end_line'],
-        ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'default<', ', ', 'valid_types' , '>)', 'valid_end_line'],
-        ['const a = ', 'map(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'valid_types', ', ', 'valid_types' , ')', 'valid_end_line'],
-        ['const a = ', 'map(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'default<', 'valid_types', '>, default<', 'valid_types' , '>)', 'valid_end_line'],
+        ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'valid_types', ')', 'valid_end_line'],
+        ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'default<', ', ', 'valid_types', '>)', 'valid_end_line'],
+        ['const a = ', 'map(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'valid_types', ', ', 'valid_types', ')', 'valid_end_line'],
+        ['const a = ', 'map(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'default<', 'valid_types', '>, default<', 'valid_types', '>)', 'valid_end_line'],
     ],
     ...preambleBindings('assert_binding_', 2, ASSERT_BINDINGS),
     assert_statement: [
@@ -903,7 +903,7 @@ const statements: Grammar = {
         /* Keep range bounds small: the compiler unrolls loops. */
         ['for (const ', 'bob', ' of ', 'very_small_random_number', '..', 'very_small_random_number', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'counter_operation', ') {\n', '}\n'],
-                ['for (const ', 'bob', ' of ', '[', 'random_table', ']) {\n', '}\n'],
+        ['for (const ', 'bob', ' of ', '[', 'random_table', ']) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', '[', 'valid_types', ']) {\n', '}\n'],  // a type is not an expression
         ['for (const ', 'bob', ' of ', '[', 'default<', 'valid_types', '>]) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', '[', 'random_keyword', ']) {\n', '}\n'],
@@ -922,11 +922,11 @@ const statements: Grammar = {
         ['for (const ', 'bob', ' of ', 'slice<', 'random_number', '>(default<', 'valid_types', '>, ', 'random_number', ')) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'slice<', 'random_number', '>(', 'random_table', ', ', 'random_number', ')) {\n', '}\n'],
     ],
-        ...preambleBindings('binding_', 4, STATEMENT_BINDINGS, {
+    ...preambleBindings('binding_', 4, STATEMENT_BINDINGS, {
         typeNode: STATEMENT_TYPE,
         terminator: 'valid_end_line',
     }),
-        statement: Object.keys(LEDGER_ADT_TYPES).map((adt) => [`adt_${adt}`]),
+    statement: Object.keys(LEDGER_ADT_TYPES).map((adt) => [`adt_${adt}`]),
     optional_statement_variable: [['const adam = ']],
     after_statement: [
         ['no_variable_after_statement'], ['variable_after_statement'],
@@ -1027,20 +1027,21 @@ const expressions: Grammar = {
 
 /* Includes supported operations plus intentional negative cases. */
 const LEDGER_OPS: Record<string, string[]> = {
-    kernel: ['balance', 'balanceGreaterThan', 'balanceLessThan', 'checkpoint', 'claimContractCall',
-             'claimUnshieldedCoinSpend', 'claimZswapCoinReceive', 'claimZswapCoinSpend',
-             'claimZswapNullifier', 'incUnshieldedInputs', 'incUnshieldedOutputs', 'mint',
-             'mintShielded', 'mintUnshielded', 'self'],
+    kernel: ['balance', 'balanceGreaterThan', 'balanceLessThan', 'blockTimeGreaterThan',
+        'blockTimeLessThan', 'checkpoint', 'claimContractCall',
+        'claimUnshieldedCoinSpend', 'claimZswapCoinReceive', 'claimZswapCoinSpend',
+        'claimZswapNullifier', 'incUnshieldedInputs', 'incUnshieldedOutputs', 'mint',
+        'mintShielded', 'mintUnshielded', 'self'],
     counter: ['decrement', 'increment', 'lessThan', 'read', 'resetToDefault'],
     set: ['insert', 'insertCoin', 'isEmpty', 'member', 'remove', 'resetToDefault', 'size'],
     map: ['insert', 'insertCoin', 'insertDefault', 'isEmpty', 'lookup', 'member', 'remove',
-          'resetToDefault', 'size'],
+        'resetToDefault', 'size'],
     list: ['head', 'isEmpty', 'length', 'popFront', 'pushFront', 'pushFrontCoin', 'resetToDefault'],
     mt: ['checkRoot', 'findPathForLeaf', 'firstFree', 'insert', 'insertHash', 'insertHashIndex',
-         'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf', 'resetToDefault', 'root'],
+        'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf', 'resetToDefault', 'root'],
     hmt: ['checkRoot', 'check_root', 'findPathForLeaf', 'firstFree', 'history', 'insert', 'insertHash',
-          'insertHashIndex', 'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf',
-          'resetHistory', 'resetToDefault', 'root'],
+        'insertHashIndex', 'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf',
+        'resetHistory', 'resetToDefault', 'root'],
 };
 
 const WIDE_ARITY: Record<string, number> = {
@@ -1105,50 +1106,54 @@ const N = 'small_random_number';
 interface StdlibCall {
     name: Token;
     generics: Token[];
-        args: number;
+    maxArgs: number;
 }
 
 const STDLIB_CALLS: StdlibCall[] = [
-    { name: 'some', generics: [T], args: 1 },
-    { name: 'none', generics: [T], args: 1 },
-    { name: 'left', generics: [T, T], args: 1 },
-    { name: 'right', generics: [T, T], args: 1 },
-    { name: 'transientHash', generics: [T], args: 1 },
-    { name: 'transientCommit', generics: [T], args: 2 },
-    { name: 'persistentHash', generics: [T], args: 1 },
-    { name: 'persistentCommit', generics: [T], args: 2 },
-    { name: 'hashToCurve', generics: [T], args: 1 },
-    { name: 'merkleTreePathRoot', generics: [N, T], args: 2 },
-    { name: 'merkleTreePathRootNoLeafHash', generics: [N], args: 1 },
-    { name: 'degradeToTransient', generics: [], args: 1 },
-    { name: 'upgradeFromTransient', generics: [], args: 1 },
-    { name: 'ecAdd', generics: [], args: 2 },
-    { name: 'ecMul', generics: [], args: 2 },
-    { name: 'ecMulGenerator', generics: [], args: 1 },
-    { name: 'nativeToken', generics: [], args: 1 },
-    { name: 'tokenType', generics: [], args: 2 },
-    { name: 'evolveNonce', generics: [], args: 2 },
-    { name: 'shieldedBurnAddress', generics: [], args: 1 },
-    { name: 'mintShieldedToken', generics: [], args: 4 },
-    { name: 'mintUnshieldedToken', generics: [], args: 3 },
-    { name: 'receiveShielded', generics: [], args: 2 },
-    { name: 'receiveUnshielded', generics: [], args: 2 },
-    { name: 'sendShielded', generics: [], args: 4 },
-    { name: 'sendImmediateShielded', generics: [], args: 4 },
-    { name: 'sendUnshielded', generics: [], args: 3 },
-    { name: 'mergeCoin', generics: [], args: 3 },
-    { name: 'mergeCoinImmediate', generics: [], args: 3 },
-    { name: 'unshieldedBalance', generics: [], args: 2 },
-    { name: 'unshieldedBalanceLt', generics: [], args: 3 },
-    { name: 'unshieldedBalanceLte', generics: [], args: 3 },
-    { name: 'unshieldedBalanceGt', generics: [], args: 3 },
-    { name: 'unshieldedBalanceGte', generics: [], args: 3 },
-    { name: 'ownPublicKey', generics: [], args: 2 },
-    { name: 'createZswapInput', generics: [], args: 2 },
-    { name: 'createZswapOutput', generics: [], args: 3 },
+    { name: 'some', generics: [T], maxArgs: 1 },
+    { name: 'none', generics: [T], maxArgs: 1 },
+    { name: 'left', generics: [T, T], maxArgs: 1 },
+    { name: 'right', generics: [T, T], maxArgs: 1 },
+    { name: 'transientHash', generics: [T], maxArgs: 1 },
+    { name: 'transientCommit', generics: [T], maxArgs: 2 },
+    { name: 'persistentHash', generics: [T], maxArgs: 1 },
+    { name: 'persistentCommit', generics: [T], maxArgs: 2 },
+    { name: 'hashToCurve', generics: [T], maxArgs: 1 },
+    { name: 'merkleTreePathRoot', generics: [N, T], maxArgs: 2 },
+    { name: 'merkleTreePathRootNoLeafHash', generics: [N], maxArgs: 1 },
+    { name: 'degradeToTransient', generics: [], maxArgs: 1 },
+    { name: 'upgradeFromTransient', generics: [], maxArgs: 1 },
+    { name: 'ecAdd', generics: [], maxArgs: 2 },
+    { name: 'ecMul', generics: [], maxArgs: 2 },
+    { name: 'ecMulGenerator', generics: [], maxArgs: 1 },
+    { name: 'nativeToken', generics: [], maxArgs: 1 },
+    { name: 'tokenType', generics: [], maxArgs: 2 },
+    { name: 'evolveNonce', generics: [], maxArgs: 2 },
+    { name: 'shieldedBurnAddress', generics: [], maxArgs: 1 },
+    { name: 'mintShieldedToken', generics: [], maxArgs: 4 },
+    { name: 'mintUnshieldedToken', generics: [], maxArgs: 3 },
+    { name: 'receiveShielded', generics: [], maxArgs: 2 },
+    { name: 'receiveUnshielded', generics: [], maxArgs: 2 },
+    { name: 'sendShielded', generics: [], maxArgs: 4 },
+    { name: 'sendImmediateShielded', generics: [], maxArgs: 4 },
+    { name: 'sendUnshielded', generics: [], maxArgs: 3 },
+    { name: 'mergeCoin', generics: [], maxArgs: 3 },
+    { name: 'mergeCoinImmediate', generics: [], maxArgs: 3 },
+    { name: 'blockTimeLt', generics: [], maxArgs: 1 },
+    { name: 'blockTimeLte', generics: [], maxArgs: 1 },
+    { name: 'blockTimeGt', generics: [], maxArgs: 1 },
+    { name: 'blockTimeGte', generics: [], maxArgs: 1 },
+    { name: 'unshieldedBalance', generics: [], maxArgs: 2 },
+    { name: 'unshieldedBalanceLt', generics: [], maxArgs: 3 },
+    { name: 'unshieldedBalanceLte', generics: [], maxArgs: 3 },
+    { name: 'unshieldedBalanceGt', generics: [], maxArgs: 3 },
+    { name: 'unshieldedBalanceGte', generics: [], maxArgs: 3 },
+    { name: 'ownPublicKey', generics: [], maxArgs: 2 },
+    { name: 'createZswapInput', generics: [], maxArgs: 2 },
+    { name: 'createZswapOutput', generics: [], maxArgs: 3 },
 ];
 
-const arities = (c: StdlibCall): number[] => Array.from({ length: c.args }, (_, i) => i + 1);
+const arities = (c: StdlibCall): number[] => Array.from({ length: c.maxArgs }, (_, i) => i + 1);
 
 const badGenerics = (genericNodes: Token[], node: Token): Token[] =>
     genericNodes.length ? [...genericNodes.slice(0, -1), node] : [];
@@ -1160,31 +1165,31 @@ const BAD_GENERIC_ARGS: Token[] = ['random_input', 'statement_methods'];
 const stdlib: Grammar = {
     statement_methods: [['variable_statement_methods'], ['no_variable_statement_methods']],
 
-        variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+    variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
         ...arities(c).flatMap((arity) =>
             argLists(arity, VALUE_ARGS).map((args) => call(c.name, c.generics, args)),
         ),
         ...(c.generics.length
             ? BAD_GENERIC_ARGS.flatMap((bad) =>
-                  arities(c).map((arity) =>
-                      call(c.name, badGenerics(c.generics, bad), same('statement_variable', arity)),
-                  ),
-              )
+                arities(c).map((arity) =>
+                    call(c.name, badGenerics(c.generics, bad), same('statement_variable', arity)),
+                ),
+            )
             : []),
     ]),
 
-        no_variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+    no_variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
         call(c.name, c.generics, []),
         ...arities(c).flatMap((arity) =>
             NO_VALUE_ARGS.map((node) => call(c.name, c.generics, same(node, arity))),
         ),
         ...(c.generics.length
             ? [
-                  call(c.name, badGenerics(c.generics, 'random_input'), []),
-                  ...arities(c).map((arity) =>
-                      call(c.name, badGenerics(c.generics, 'random_input'), same('statement_std_types', arity)),
-                  ),
-              ]
+                call(c.name, badGenerics(c.generics, 'random_input'), []),
+                ...arities(c).map((arity) =>
+                    call(c.name, badGenerics(c.generics, 'random_input'), same('statement_std_types', arity)),
+                ),
+            ]
             : []),
     ]),
 };
