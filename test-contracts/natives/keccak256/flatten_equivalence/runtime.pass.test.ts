@@ -20,9 +20,9 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { runKat } from '@test/crypto';
 
-// Types whose chunks concatenate to the same bytes must hash identically, so
-// this needs no external oracle -- it compares the three circuits to each other.
-//
+// The three circuits are compared against each other, so no expected digest is
+// needed. Two of the inputs put zeros on the field boundaries, which is where
+// dropping trailing zeros would break it.
 const inputs: Uint8Array[] = [
     Uint8Array.from({ length: 12 }, (_unused, i) => i + 1),
     Uint8Array.from({ length: 12 }, (_unused, i) => 0xf0 + i),

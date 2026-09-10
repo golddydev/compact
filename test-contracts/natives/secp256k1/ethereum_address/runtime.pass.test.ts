@@ -18,13 +18,11 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { loadAddressVectors, runKat } from '@test/crypto';
 
-// The stdlib `secp256k1EthereumAddress` held to the canonical `ethereum/tests`
-// key-to-address vectors. The circuit computes keccak256(x_be || y_be)[12:32),
-// which IS the EIP derivation, so these must match exactly.
+// The stdlib address circuit checked against published ethereum/tests
+// addresses. It follows the real Ethereum rule, so these must match exactly.
 //
-// The oracle is an external published fixture rather than a recomputation, so
-// this is independent of the runtime's keccak implementation -- worth noting,
-// because a keccak digest computed in JS would not be.
+// The addresses come from a file rather than being worked out here, so this
+// does not lean on the runtime's own keccak.
 const vectors = loadAddressVectors();
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(

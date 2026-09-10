@@ -34,12 +34,11 @@ function drive(pure: PureCircuits, vector: EcdsaVector): boolean {
         );
     }
 
-    // Out-of-range r/s never reach the circuit: the argument type-check
-    // rejects them, which for a caller just means an invalid signature.
+    // Out-of-range r or s never reach the circuit, and count as a bad signature.
     return vector.scalarsInRange && circuit(vector.msg, vector.sig, vector.pk);
 }
 
-/** `10B=42, 20B=17, ...` — which message lengths the corpus exercises. */
+/** How many vectors there are of each message length. */
 function lengthBreakdown(vectors: readonly EcdsaVector[]): string {
     const byLength = new Map<number, number>();
 

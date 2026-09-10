@@ -24,19 +24,16 @@ import {
     type EcdsaVector,
 } from '@test/crypto';
 
-// Two things over the Wycheproof corpus (see support/crypto/data/README.md).
+// Two things over the Wycheproof vectors (see support/crypto/data/README.md).
 //
-// 1. The KAT: drive `verifyEcdsa` with an off-circuit digest, so only the curve
-//    arithmetic is under test. Every expectation is backed by both the corpus
-//    verdict and @noble/curves' raw check, which is independent here because the
-//    ECDSA equations live in Compact.
+// 1. Check signatures with the digest hashed outside the circuit, so only the
+//    curve maths is tested. Each expected answer comes from both the vectors
+//    and @noble/curves.
 //
-// 2. The recovery round trip. `secp256k1EcdsaRecover` is not a circuit; the
-//    stdlib says to recover off-circuit and verify the key in-circuit, so that
-//    documented flow gets covered rather than only described.
+// 2. Recover the key outside the circuit and check it inside, which is the way
+//    the stdlib says to do it.
 
-// Out-of-range r/s never reach the circuit: the argument type-check rejects
-// them, which for a caller just means an invalid signature.
+// Out-of-range r or s never reach the circuit, and count as a bad signature.
 function drive(pure: PureCircuits, vector: EcdsaVector): boolean {
     return (
         vector.scalarsInRange &&
@@ -69,8 +66,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             );
         }
 
-        // A valid signature has more than one candidate recovery id; the
-        // recovered key only has to verify.
+        // Several recovery ids are possible, so try each until one verifies.
         const roundTripped = valid.filter((vector) =>
             [0, 1, 2, 3].some((recoveryId) => {
                 try {

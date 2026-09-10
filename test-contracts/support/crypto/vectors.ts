@@ -15,49 +15,27 @@
 
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 
-/**
- * Digest vectors over a sweep of `Bytes<N>` widths, shared by the keccak256 and
- * persistentHash (SHA-256) fixtures.
- *
- * ORACLE INDEPENDENCE — read before choosing between `computed` and `pinned`:
- *
- * `persistentHash` is implemented by the Rust on-chain runtime
- * (`built-ins.ts`, `ocrt.persistentHash`), so a digest computed here with
- * `@noble/hashes` is a genuine second implementation and `computed` vectors
- * carry their weight.
- *
- * `keccak256` is NOT: the JS runtime implements it as
- * `keccak_256(toBinaryRepr(...))` over the very same `@noble/hashes` this
- * package depends on. A `computed` keccak vector therefore tests `toBinaryRepr`
- * — the CompactType-to-bytes encoding, which is exactly what the trailing-zero
- * and field-encoding fixtures are about — and tells you nothing about the hash
- * core. Pin published digests with `pinned` wherever the hash core itself is
- * the thing under test.
- */
+// Digest vectors over a range of `Bytes<N>` widths, shared by the keccak256
+// and sha256 fixtures.
+//
+// `computed` digests come from @noble/hashes, which is a second implementation
+// for persistentHash but not for keccak256, since the runtime computes keccak
+// with that same library. Use `pinned` published digests for keccak.
 
 /** A `Bytes<N>` input paired with its expected digest. */
 export type LengthVector = {
-    /** Input bytes as lowercase hex; its byte length picks the `Bytes<N>` circuit. */
+    /** Input bytes as hex; the length picks which circuit runs. */
     input: string;
-    /** Expected digest of `input`, as a 64-character lowercase hex string. */
+    /** The digest `input` should hash to, as hex. */
     digest: string;
-    /** Optional annotation, appended to the `Bytes<N>` identity in failures. */
+    /** Optional note shown in failure messages. */
     label?: string;
 };
 
-/** A hash function over raw bytes — `keccak_256` or `sha256` from @noble/hashes. */
+/** A hash function over raw bytes. */
 export type DigestFn = (input: Uint8Array) => Uint8Array;
 
-/**
- * The width sweep both hash features cover:
- *
- * - `1` — the minimal single-byte input.
- * - `32..63` — every width from the digest width through one byte past the
- *   2x31 = 62 field-element packing boundary. 33 is also the compressed
- *   secp256k1 public-key length.
- * - `93`, `94` — straddling the 3x31 packing multiple.
- * - `376` — the CCTP V2 burn-message length, a real-world size.
- */
+/** Widths on and around the 31-byte field packing boundaries. */
 export const packingWidths: readonly number[] = [
     1,
     ...Array.from({ length: 32 }, (_unused, index) => 32 + index),
@@ -65,29 +43,21 @@ export const packingWidths: readonly number[] = [
     94,
 ];
 
-/** a real-world size and a multi-block input. */
+/** A real-world size and a large multi-block input. */
 export const largeWidths: readonly number[] = [376, 1024];
 
-/** Every width the shared `multi_length` contracts are expected to export. */
+/** Every width the `multi_length` contracts export. */
 export const sweepWidths: readonly number[] = [
     ...packingWidths,
     ...largeWidths,
 ];
 
-/**
- * The deterministic filler: `byte i = (i % 255) + 1`.
- *
- * Every byte is nonzero.
- */
+/** Repeatable filler bytes, none of them zero. */
 export function fillerBytes(length: number): Uint8Array {
     return Uint8Array.from({ length }, (_unused, index) => (index % 255) + 1);
 }
 
-/**
- * Builds a vector whose expected digest is COMPUTED by `digest`.
- *
- * Used for `persistentHash`.
- */
+/** A vector whose digest is computed by `digest`. */
 export function computed(
     digest: DigestFn,
     input: Uint8Array,
@@ -105,11 +75,7 @@ export function computed(
     return vector;
 }
 
-/**
- * Builds a vector whose expected digest is a PUBLISHED constant, independent of
- * any implementation this package can reach. The only oracle that tests a hash
- * core the runtime shares with `@noble/hashes`.
- */
+/** A vector whose digest is a published constant, so it checks the hash itself. */
 export function pinned(
     input: Uint8Array | string,
     digest: string,
@@ -125,10 +91,7 @@ export function pinned(
     return vector;
 }
 
-/**
- * The filler-input vector for every width in `widths`, with digests computed by
- * `digest`. A fixture appends its own hand-written or pinned vectors.
- */
+/** One filler vector per width. */
 export function sweepVectors(
     digest: DigestFn,
     widths: readonly number[] = sweepWidths,
@@ -136,22 +99,19 @@ export function sweepVectors(
     return widths.map((width) => computed(digest, fillerBytes(width)));
 }
 
-/** The `Bytes<N>` width a vector drives. */
+/** The `Bytes<N>` width of a vector. */
 export function vectorWidth(vector: LengthVector): number {
     return vector.input.length / 2;
 }
 
-/** Short vector identity for failure messages, e.g. `Bytes<62> (CCTP)`. */
+/** A short name for failure messages, such as `Bytes<62>`. */
 export function vectorLabel(vector: LengthVector): string {
     const width = `Bytes<${vectorWidth(vector)}>`;
 
     return vector.label === undefined ? width : `${width} (${vector.label})`;
 }
 
-/**
- * Resolves the `hashBytes{N}` circuit a vector drives, failing with the width
- * that is missing rather than `circuit is not a function`.
- */
+/** Finds the `hashBytes{N}` circuit, naming the width if it is missing. */
 export function widthCircuit(
     pureCircuits: Record<string, unknown>,
     width: number,
@@ -168,10 +128,7 @@ export function widthCircuit(
     return circuit as (value: Uint8Array) => Uint8Array;
 }
 
-/**
- * Drives one vector through its `hashBytes{N}` circuit and compares the digest.
- * Throws with both digests on a mismatch; used as the `check` of a `runKat`.
- */
+/** Hashes one vector through its circuit and compares the digest. */
 export function checkWidthVector(
     pureCircuits: Record<string, unknown>,
     vector: LengthVector,

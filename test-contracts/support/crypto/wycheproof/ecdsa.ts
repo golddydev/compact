@@ -32,13 +32,12 @@ import {
     type Expectation,
 } from './corpus.ts';
 
-// ECDSA verify corpora (secp256k1, secp256r1). Signatures are DER, keys are
-// uncompressed `04 || wx || wy`, and the message is hashed before verifying.
-// EdDSA shares none of that and belongs in a sibling module.
+// ECDSA corpora, where signatures are DER and keys are `04 || x || y`.
 //
-// The Compact primitive takes (r, s) scalars and an (x, y) point directly, so
-// this module DER-decodes each signature, decodes the key, and precomputes the
-// digest. Vectors it cannot ask the circuit about are excluded by reason.
+// The circuit takes r, s and a point directly, so each signature and key is
+// decoded here and the message is hashed up front. Vectors the circuit cannot
+// answer are excluded with a reason. EdDSA works differently and needs its own
+// file.
 
 type EcdsaGroup = {
     type: string;
@@ -48,21 +47,17 @@ type EcdsaGroup = {
 };
 
 type EcdsaSuite = {
-    /** Short identity for reports. */
+    /** Short name shown in reports. */
     name: string;
     vectorsFile: string;
-    /** The @noble/curves reference. `secp256k1` and `p256` are interchangeable here. */
+    /** The @noble/curves curve used as the reference. */
     curve: typeof secp256k1;
     hash: (msg: Uint8Array) => Uint8Array;
-    /**
-     * True when the corpus verdicts enforce low-s but the circuit does not, so
-     * valid high-s signatures must be excluded. Bitcoin only; the secp256r1
-     * corpora are raw ECDSA.
-     */
+    /** True when the corpus applies a low-s rule the circuit does not. */
     enforcesLowS: boolean;
-    /** tcIds whose verification point is the identity, so the circuit aborts. */
+    /** Vectors whose maths reaches the identity point, so the circuit fails. */
     identityPointTcIds: ReadonlySet<number>;
-    /** Failure messages the circuit may legitimately abort with. */
+    /** Failure messages that count as an expected abort. */
     abortMessages: string[];
     coverage: Coverage;
 };
@@ -92,11 +87,7 @@ type EcdsaScalars = {
     s: bigint;
 };
 
-/**
- * The point at infinity, as the runtime spells it. Weierstrass-only: affine
- * coordinates cannot express it, hence the flag. Edwards curves have no such
- * case, so this stays private to this module.
- */
+/** How the runtime writes the point at infinity. */
 const IDENTITY_POINT: Secp256k1Point = {
     x: 0n,
     y: 0n,
@@ -105,22 +96,17 @@ const IDENTITY_POINT: Secp256k1Point = {
 
 export type EcdsaVector = DrivenVector & {
     flags: string[];
-    /** Raw message bytes; the input to the digest. */
+    /** The message bytes that get hashed. */
     msg: Uint8Array;
-    /** Precomputed digest, big-endian. */
+    /** The message digest, big-endian. */
     e: Uint8Array;
     sig: EcdsaScalars;
     pk: Secp256k1Point;
-    /** False when r or s is outside [0, n), which the argument type-check rejects. */
+    /** False when r or s is out of range, which the circuit rejects up front. */
     scalarsInRange: boolean;
 };
 
-/**
- * Decode the DER `SEQUENCE { INTEGER r, INTEGER s }`, or undefined when it does
- * not parse. noble's parser is strict about the things that matter here --
- * minimal lengths, no leading zeros, no trailing bytes -- so a rejection means
- * the vector only exercises a parser the circuit does not have.
- */
+/** Decodes a DER signature into r and s, or undefined if it does not parse. */
 function decodeSignature(sigHex: string): EcdsaScalars | undefined {
     try {
         return DER.toSig(hexToBytes(sigHex));
@@ -152,8 +138,7 @@ function parseUncompressedPublicKey(
         );
     }
 
-    // Deliberately not `Point.fromBytes`: that validates on-curve, and the
-    // corpus is allowed to hand the circuit a key the circuit should reject.
+    // Not `Point.fromBytes`, because that rejects keys the corpus wants tested.
     const body = hexToBytes(uncompressed.slice(2));
     const x = bytesToNumberBE(body.subarray(0, size));
     const y = bytesToNumberBE(body.subarray(size));
@@ -161,10 +146,7 @@ function parseUncompressedPublicKey(
     return x === 0n && y === 0n ? IDENTITY_POINT : { x, y, identity: false };
 }
 
-/**
- * The raw ECDSA verdict from @noble, with low-s disabled. Independent of the
- * circuit: the ECDSA equations live in Compact, only field arithmetic is shared.
- */
+/** What @noble says about the signature, with the low-s rule turned off. */
 function rawEcdsaVerify(
     suite: EcdsaSuite,
     e: Uint8Array,
@@ -191,12 +173,11 @@ function rawEcdsaVerify(
 }
 
 /**
- * Split a corpus into driven vectors and excluded ones.
+ * Splits a corpus into vectors to run and vectors to leave out.
  *
- * Excluded for `encoding` when the DER does not strictly parse, so the vector
- * only exercises a parser the circuit lacks. Excluded for `malleability` when
- * the raw verdict disagrees with the corpus because of low-s. Any other
- * disagreement throws: it would mean noble and the corpus genuinely differ.
+ * A vector is left out when its signature does not decode, or when the corpus
+ * only calls it invalid because of the low-s rule. Any other disagreement with
+ * @noble throws, since that would mean something real is wrong.
  */
 function classifyEcdsa(suite: EcdsaSuite): Classified<EcdsaVector> {
     const root = loadCorpus<CorpusRoot<EcdsaGroup>>(suite.vectorsFile);
@@ -284,7 +265,7 @@ function classifyEcdsa(suite: EcdsaSuite): Classified<EcdsaVector> {
     return { total, driven, excluded };
 }
 
-/** Classify, then drive every vector and assert its expectation. */
+/** Sorts the corpus, then runs every vector it kept. */
 export function runEcdsaKat(
     suite: EcdsaSuite,
     label: string,

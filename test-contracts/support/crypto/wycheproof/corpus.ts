@@ -19,8 +19,8 @@ import { fileURLToPath } from 'node:url';
 
 import { buildReport, formatFailure, type KatOutcome } from '../kat.ts';
 
-// Shared Wycheproof utils: the file envelope, the loader, and the KAT
-// driver. Signature and key decoding differ per crypto Signature scheme.
+// Shared Wycheproof parts: the file shape, the loader, and the runner.
+// Each signature scheme decodes its own signatures and keys.
 
 const dataDir = path.join(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -30,14 +30,14 @@ const dataDir = path.join(
 
 type CorpusResult = 'valid' | 'invalid';
 
-/** One test case. Every Wycheproof verify schema shares these fields. */
+/** One test case, in the shape every Wycheproof file uses. */
 export type CorpusTest = {
     tcId: number;
     comment: string;
     flags?: string[];
     /** Hex message. */
     msg: string;
-    /** Hex signature; the encoding is the scheme's business. */
+    /** Signature as hex; each scheme decodes it its own way. */
     sig: string;
     result: CorpusResult;
 };
@@ -56,7 +56,7 @@ export function loadCorpus<Root>(vectorsFile: string): Root {
     ) as Root;
 }
 
-/** What a driven vector should do. `abort` means the circuit must fail. */
+/** What a vector should do; `abort` means the circuit must fail. */
 export type Expectation = 'valid' | 'invalid' | 'abort';
 
 export type DrivenVector = {
@@ -65,12 +65,7 @@ export type DrivenVector = {
     expectation: Expectation;
 };
 
-/**
- * Extra lines for the coverage block. Called only when the KAT fails, so a
- * summary that costs real work is not paid for on every green run.
- */
-
-/** Vectors a suite deliberately does not drive, reported so coverage is visible. */
+/** Vectors a suite chose not to run, kept so the count stays visible. */
 export type Excluded = {
     reason: string;
     tcIds: number[];
@@ -82,17 +77,14 @@ export type Classified<V extends DrivenVector> = {
     excluded: Excluded[];
 };
 
-/** Pinned bucket sizes, keyed by exclusion reason. */
+/** The counts a suite expects, so a corpus change is noticed. */
 export type Coverage = {
     total: number;
     driven: number;
     excluded: Record<string, number>;
 };
 
-/**
- * Drives every classified vector and asserts its expectation. A driver that
- * throws does not stop the run.
- */
+/** Runs every vector and checks it did what was expected. */
 export function runCorpusKat<V extends DrivenVector>(
     label: string,
     classified: Classified<V>,

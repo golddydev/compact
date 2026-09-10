@@ -20,14 +20,10 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { runKat } from '@test/crypto';
 
-// `persistentHash<Bytes<12>>` hashes all twelve bytes, trailing 0x00 included --
-// the same guarantee keccak256 gives, reached by a different route: the trimmed
-// value and the alignment go to the Rust on-chain runtime rather than through
-// `toBinaryRepr`. Nothing covered this before, because the upstream sha256
-// vectors use all-nonzero filler throughout.
+// All twelve bytes are hashed, including zeros at the end.
 //
-// The reference here is a genuine second implementation: `persistentHash` does
-// not go through @noble/hashes, unlike keccak256.
+// Bytes are sent without their trailing zeros and the width is put back on the
+// other side, so this checks nothing is lost on the way.
 const inputs: { label: string; input: Uint8Array }[] = [
     {
         label: 'no trailing zero (control)',
@@ -63,7 +59,7 @@ const inputs: { label: string; input: Uint8Array }[] = [
     },
 ];
 
-/** What a trailing-zero trim would have hashed, or undefined if it changes nothing. */
+/** What dropping the trailing zeros would have hashed, if it makes a difference. */
 function trimmedDigest(input: Uint8Array): string | undefined {
     let end = input.length;
 

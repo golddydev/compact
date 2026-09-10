@@ -13,19 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 over the shared `Bytes<N>` width sweep: 1 (the minimal input),
-// every width from 32 (the digest width) through 63 (one past the 2x31 = 62
-// field-element packing boundary; 33 is also the compressed secp256k1
-// public-key length), 93/94 (straddling the 3x31 multiple), 376 (the CCTP V2
-// burn-message length) and 1024 (a multi-block input). See
-// `support/crypto/vectors.ts`.
+// keccak256 over many input widths, from 1 byte up to 1024.
 //
-// The widths, not the hash core, are the subject here: the runtime shares its
-// keccak implementation with the reference, so what this actually exercises is
-// `toBinaryRepr` across packing boundaries. The core is pinned against
-// published digests by ../known_vectors.
+// The widths are the point here, not the hash: they land on and around the
+// boundaries where Compact packs bytes into field elements. Published digests
+// are in ../known_vectors.
 //
-// Pure circuits, so no `--feature-zkir-v3`.
+// All the circuits are pure, so no feature flag is needed.
 
 pragma language_version >= 0.25.0;
 

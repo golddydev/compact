@@ -13,15 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The provable counterpart of ../../ethereum_address: writing the derived
-// address to a ledger cell makes the circuit provable, so
-// `secp256k1EthereumAddress` -- keccak256 over a curve point -- has to survive
-// zkir v3 lowering rather than only running off-chain.
+// The provable version of ../../ethereum_address: writing the address to the
+// ledger means hashing a curve point has to survive zkir v3.
 //
-// That lowering used to crash with a `cannot-happen` in `zkir-v3-passes.ss`;
-// it was fixed by "Handle alignment for curve points in ZKIR v3"
-// (LFDT-Minokawa/compact#612). This fixture pins the fix, keys and all, which
-// is why it lives under `slow/`.
+// That used to crash the compiler and was fixed in compact#612.
 
 pragma language_version >= 0.25.0;
 

@@ -17,17 +17,13 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { checkWidthVector, pinned, runKat, vectorLabel } from '@test/crypto';
 
-// PUBLISHED Keccak-256 digests, hard-coded on purpose.
+// Published Keccak-256 digests, written out on purpose.
 //
-// This is the one keccak fixture whose oracle is independent of the
-// implementation under test. The runtime computes keccak256 with the same
-// @noble/hashes the tests import, so a digest computed here would only re-check
-// `toBinaryRepr`; a published constant checks the hash itself. Every other
-// keccak fixture leans on this one for core correctness and covers encoding.
+// The runtime computes keccak with the same library the tests import, so a
+// digest computed here would only recheck the encoding. These constants come
+// from elsewhere, so they check the hash itself.
 //
-// Each vector's byte length selects its `hashBytes{N}` circuit. `Bytes<0>` makes
-// the empty-input digest expressible, and the all-zero vectors hash their N zero
-// bytes rather than a trimmed prefix (../trailing_zero pins that).
+// Each vector's length picks its circuit.
 const vectors = [
     pinned(
         '',

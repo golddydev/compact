@@ -13,15 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Two and three `secp256k1EcdsaVerify` gates instantiated in a SINGLE circuit,
-// run sequentially over the same digest with independent (signature, key)
-// pairs. The point is that repeated instantiation does not panic the compiler
-// or blow up lowering.
+// Two and three signature checks in one circuit, to be sure repeating the
+// gate does not upset the compiler.
 //
-// The ledger write makes these provable, so this is real zkir v3 lowering with
-// proving-key generation -- hence `slow/`, which the orchestrator compiles
-// exclusively. Compile coverage only: the verdicts themselves are
-// ../../ecdsa_verify's job.
+// The ledger write makes them provable, so this generates keys and is slow.
 
 pragma language_version >= 0.25.0;
 

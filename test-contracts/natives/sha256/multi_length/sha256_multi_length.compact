@@ -13,21 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// persistentHash (SHA-256) over fixed `Bytes<N>` values across the width sweep
-// shared with the keccak256 fixtures: 1 (the minimal input), every width from
-// 32 (the digest width) through 63 (one past the 2x31 = 62 field-element
-// packing boundary; 33 is also the compressed secp256k1 public-key length),
-// 93/94 (straddling the 3x31 multiple), 376 (the CCTP V2 burn-message length)
-// and 1024 (a multi-block input). See `support/crypto/vectors.ts`.
+// persistentHash over the same input widths as the keccak256 sweep.
 //
-// Every circuit is pure: it touches no ledger state, so persistentHash is
-// computed off-chain by the runtime and reachable through `pureCircuits`, with
-// no deploy and no proof. `persistentHash` is a core stdlib circuit, so unlike
-// keccak256 nothing here needs `--feature-zkir-v3`.
+// persistentHash runs in the Rust runtime rather than in JavaScript, so the
+// expected digests really are from a second implementation.
 //
-// Because the runtime routes persistentHash to the Rust on-chain runtime rather
-// than to @noble/hashes, the digests this fixture checks against are a genuine
-// second implementation.
+// All the circuits are pure, and persistentHash needs no feature flag.
 
 pragma language_version >= 0.25.0;
 

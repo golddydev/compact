@@ -15,5 +15,5 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure circuits, so no `--feature-zkir-v3`.
+// All pure, so no feature flag is needed.
 export default defineCompileTest(import.meta.url);

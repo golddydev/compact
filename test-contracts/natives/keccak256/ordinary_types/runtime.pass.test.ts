@@ -20,10 +20,9 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { runKat } from '@test/crypto';
 
-// Shape, determinism and distinctness across every ordinary type family. These
-// are properties the circuit must satisfy on its own terms, so no oracle is
-// involved -- encoding correctness for the field-element types is
-// ../field_types, and digest correctness is ../known_vectors.
+// For each kind of type: the digest is 32 bytes, it is the same every time, and
+// different inputs give different digests. Encodings are in ../field_types and
+// published digests in ../known_vectors.
 const probes: { name: string; a: unknown; b: unknown }[] = [
     { name: 'hashField', a: 0n, b: 123456789n },
     {

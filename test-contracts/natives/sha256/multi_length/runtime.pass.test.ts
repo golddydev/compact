@@ -24,13 +24,8 @@ import {
     vectorLabel,
 } from '@test/crypto';
 
-// `persistentHash<Bytes<N>>` equals a standard SHA-256 of the raw N bytes. The
-// runtime computes it in the Rust on-chain runtime, so the @noble/hashes
-// digests below are an independent implementation rather than the same code
-// answering twice.
-// A fixture that needs an oracle independent of BOTH implementations — the way
-// the keccak256 fixtures do, since there the runtime and the reference are the
-// same @noble code — adds published digests with `pinned` instead.
+// persistentHash of N bytes is a plain SHA-256 of those bytes. It runs in the
+// Rust runtime, so the expected digests below come from different code.
 const vectors = sweepVectors(sha256);
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(

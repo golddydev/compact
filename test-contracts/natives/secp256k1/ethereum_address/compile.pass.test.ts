@@ -15,7 +15,7 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure, but needs the v3 IR for `Secp256k1Point` and the keccak over a point.
+// Pure, but the key type and the hash both need the flag.
 export default defineCompileTest(import.meta.url, {
     compilerArgs: ['--feature-zkir-v3'],
 });

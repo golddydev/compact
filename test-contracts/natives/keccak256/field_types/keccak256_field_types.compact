@@ -13,26 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 over non-`Bytes` field-element types, pinned against digests
-// computed off-circuit from the actual encoding rather than only checked for
-// shape (which is ../ordinary_types).
+// keccak256 over Field values rather than bytes.
 //
-// A `Field` atom flattens to a FIXED 32-byte LITTLE-ENDIAN value, zero-padded,
-// with no trailing-zero trim:
+// A Field becomes a fixed 32 bytes, little-endian, padded with zeros. So
+// keccak256<Field>(0) hashes 32 zero bytes and is not the empty input, and
+// each element of a vector keeps its own 32-byte slot.
 //
-//   keccak256<Field>(5)   = keccak256(0x05 then 31 x 0x00)
-//   keccak256<Field>(256) = keccak256(0x00 0x01 then 30 x 0x00)  // little-endian
-//   keccak256<Field>(0)   = keccak256(32 x 0x00)                 // NOT the empty input
-//
-// So `keccak256<Field>(0)` must NOT collide with the empty-input digest that
-// `keccak256<Bytes<0>>` returns -- the width is framed at a full 32 bytes.
-//
-// A `Vector<3, Field>` flattens to its three 32-byte encodings concatenated
-// (96 bytes). Each element keeps its own block, so `[1, 2, 3]` and
-// `[0x030201, 0, 0]` hash differently, where a trimmed encoding would collapse
-// both to 0x01 0x02 0x03.
-//
-// Pure circuits, so no `--feature-zkir-v3`.
+// Both circuits are pure, so no feature flag is needed.
 
 pragma language_version >= 0.25.0;
 

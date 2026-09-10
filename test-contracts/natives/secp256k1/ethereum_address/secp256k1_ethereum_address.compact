@@ -13,19 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The standard library's `secp256k1EthereumAddress` circuit, which derives the
-// canonical Ethereum address from a public key:
+// The stdlib circuit that turns a public key into an Ethereum address.
 //
-//   keccak256(x_be(32) || y_be(32))[12:32)
+// It hashes the two coordinates and keeps the last 20 bytes, which is the real
+// Ethereum rule, so the test compares against published addresses.
 //
-// i.e. keccak over the big-endian uncompressed coordinates, taking the LAST 20
-// bytes. That is the real EIP derivation, so the runtime test holds it to the
-// canonical `ethereum/tests` key-to-address vectors and expects a match.
-//
-// The point at infinity is rejected by the stdlib assert -- it has no address.
-//
-// Pure, so no proving keys, but `--feature-zkir-v3` is required both for
-// `Secp256k1Point` and because the circuit hashes a curve point.
+// Pure, but the v3 flag is needed for the key type and the hash.
 
 pragma language_version >= 0.25.0;
 

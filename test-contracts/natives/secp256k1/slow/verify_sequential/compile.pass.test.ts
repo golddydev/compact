@@ -15,8 +15,7 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Provable (the ledger write), so this is real zkir v3 lowering with key
-// generation for repeated secp256k1EcdsaVerify gates -- hence `slow/`.
+// Provable, so this generates keys and is slow.
 export default defineCompileTest(import.meta.url, {
     compilerArgs: ['--feature-zkir-v3'],
 });

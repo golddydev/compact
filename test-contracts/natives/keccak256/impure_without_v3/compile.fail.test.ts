@@ -15,9 +15,8 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// The ledger write makes the circuit provable, pulling keccak256 into zkir.
-// zkir-v2 has no keccak256 gate, so this must fail without the v3 IR. The same
-// source compiles in ../impure_with_v3.
+// The ledger write makes this provable, and zkir v2 has no keccak256, so it
+// must fail without the flag. The same source compiles in ../impure_with_v3.
 export default defineCompileTest(import.meta.url, {
     expectedError: /keccak256 is not supported in ZKIR v2/,
 });

@@ -13,10 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 rejects ADT (ledger) types: hashing a `Counter` is a type error.
+// keccak256 does not accept ledger types, so hashing a Counter is an error.
 //
-// Compiled WITH `--feature-zkir-v3` on purpose. Reading the ledger makes the
-// circuit provable
+// Compiled with the v3 flag on purpose. Without it the missing keccak256 in
+// zkir v2 would fail first and the test would pass for the wrong reason.
 
 pragma language_version >= 0.25.0;
 

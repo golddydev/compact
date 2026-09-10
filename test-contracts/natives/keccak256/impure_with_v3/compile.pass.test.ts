@@ -15,8 +15,8 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// The v3 IR supplies the keccak256 gate, so the source that fails in
-// ../impure_without_v3 compiles here, proving keys included.
+// With the flag, keccak256 is available to provable circuits, so the source
+// that fails in ../impure_without_v3 compiles here.
 export default defineCompileTest(import.meta.url, {
     compilerArgs: ['--feature-zkir-v3'],
 });

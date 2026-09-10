@@ -15,8 +15,8 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// No flag: the whole secp256k1 stdlib lives in the compiler's zkir-v3-library,
-// so naming `Secp256k1Point` is unbound without `--feature-zkir-v3`.
+// No flag, so the secp256k1 library is missing and naming one of its types
+// fails.
 export default defineCompileTest(import.meta.url, {
     expectedError: /unbound identifier Secp256k1Point/,
 });

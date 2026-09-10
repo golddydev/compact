@@ -15,7 +15,7 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure: 10 message-length circuits, no keys, but the v3 IR is still required.
+// Pure, so no keys are generated, but the flag is still needed.
 export default defineCompileTest(import.meta.url, {
     compilerArgs: ['--feature-zkir-v3'],
 });

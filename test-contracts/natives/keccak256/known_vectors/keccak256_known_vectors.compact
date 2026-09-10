@@ -13,21 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 over fixed `Bytes<N>` values, one circuit per published
-// known-vector byte length: 0 (the empty input), 1/2/5/10 (the "N zero bytes"
-// vectors), 4 ("test") and 18 ("longer test string").
+// keccak256 over fixed-size inputs, one circuit per published test vector.
 //
-// This is the fixture that pins the keccak256 CORE against published digests.
-// It matters because the runtime implements keccak256 with the same
-// @noble/hashes the tests depend on, so a computed digest would only re-check
-// the encoding; a published constant is the one oracle independent of both.
+// This is the fixture that checks keccak itself, using digests published
+// elsewhere. Everywhere else the expected digest is computed with the same
+// library the runtime uses, so it would only be checking the encoding.
 //
-// `keccak256<Bytes<N>>` hashes the full N bytes -- trailing 0x00 is not
-// trimmed (see ../trailing_zero) -- so the all-zero vectors hash their N zero
-// bytes and `Bytes<0>` makes the empty-input vector expressible.
-//
-// Every circuit is pure, so keccak256 never enters zkir and this compiles
-// without `--feature-zkir-v3`.
+// All the circuits are pure, so no feature flag is needed.
 
 pragma language_version >= 0.25.0;
 

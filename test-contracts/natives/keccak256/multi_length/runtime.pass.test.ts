@@ -24,13 +24,11 @@ import {
     vectorLabel,
 } from '@test/crypto';
 
-// The width sweep: 1, 32..63, 93/94, 376, 1024.
+// Widths from 1 byte to 1024.
 //
-// The expected digests are computed with @noble/hashes, which is the same
-// implementation the runtime uses for keccak256 -- so what this actually pins is
-// `toBinaryRepr`, the CompactType-to-bytes encoding, across the field-element
-// packing boundaries. That is the interesting variable here; the hash core is
-// pinned against published digests by ../known_vectors.
+// The expected digests come from the same library the runtime uses, so this
+// checks the encoding across packing boundaries rather than the hash itself.
+// Published digests are in ../known_vectors.
 const vectors = sweepVectors(keccak_256);
 
 export default defineRuntimeTest<typeof Contract, PureCircuits>(

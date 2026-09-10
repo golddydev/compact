@@ -15,5 +15,5 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure circuits: no zkir, no flag, and 37 widths in one compile.
+// All pure, so no feature flag; 37 widths in one compile.
 export default defineCompileTest(import.meta.url);

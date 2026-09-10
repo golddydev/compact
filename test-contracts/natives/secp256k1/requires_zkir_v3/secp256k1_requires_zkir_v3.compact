@@ -13,14 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The entire secp256k1 standard library -- the `Secp256k1Point` type, the
-// signature structs, and the `secp256k1Ecdsa*` circuits -- lives in the
-// compiler's `zkir-v3-library.compact`, which is loaded only when the v3 IR is
-// enabled. So even a pure secp256k1 contract fails without the flag.
-//
-// Naming the type is the whole test, so this contract is deliberately minimal
-// rather than a copy of ../ecdsa_verify: a compile-fail fixture should provoke
-// exactly one diagnostic and nothing else.
+// The whole secp256k1 library only exists with the v3 flag, so naming one of
+// its types is enough to fail without it.
 
 pragma language_version >= 0.25.0;
 

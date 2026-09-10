@@ -13,25 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 hashes the FLATTENED bytes of its argument and is blind to the
-// CompactType's field structure: there is no alignment or length framing
-// between fields, so any two types whose chunks concatenate to the same bytes
-// produce the same digest.
+// keccak256 hashes the bytes of a value and ignores how its fields are split.
 //
-// `Triple` (three `Bytes<4>`) and `Uneven` (`Bytes<1>` + `Bytes<4>` +
-// `Bytes<7>`) both flatten to the same 12 bytes as a `Bytes<12>`. Every field
-// contributes its FULL declared width, so the equivalence holds for any byte
-// pattern -- fields ending in, or made entirely of, 0x00 included.
+// `Triple` and `Uneven` divide the same 12 bytes differently, so all three
+// circuits must return the same digest for the same bytes.
 //
-// This is a self-consistency property, so it needs no external oracle: digest
-// correctness is ../known_vectors, and the no-trim behaviour is
-// ../trailing_zero. Pure circuits, so no `--feature-zkir-v3`.
+// All the circuits are pure, so no feature flag is needed.
 
-// Three equal 4-byte fields: flattens to 12 bytes.
 struct Triple { a: Bytes<4>, b: Bytes<4>, c: Bytes<4> }
 
-// Unequal field sizes summing to the same 12 bytes, so the digest cannot
-// depend on where the field boundaries fall.
 struct Uneven { head: Bytes<1>, mid: Bytes<4>, tail: Bytes<7> }
 
 pragma language_version >= 0.25.0;

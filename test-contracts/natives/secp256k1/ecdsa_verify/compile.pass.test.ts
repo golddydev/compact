@@ -15,7 +15,7 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure, so no proving keys, but the secp256k1 stdlib itself needs the v3 IR.
+// Pure, so no keys are generated, but the secp256k1 library needs the flag.
 export default defineCompileTest(import.meta.url, {
     compilerArgs: ['--feature-zkir-v3'],
 });

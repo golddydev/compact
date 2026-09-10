@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// keccak256 accepts any ORDINARY Compact type. One circuit per type family --
-// `Field`, `Bytes<N>`, `Boolean`, `Uint<N>`, `Vector` and a struct -- asserted
-// for 32-byte shape, determinism, and distinct digests from distinct inputs.
+// keccak256 accepts any ordinary Compact type, one circuit per kind.
 //
-// Encoding correctness for the field-element types is ../field_types; the ADT
-// rejection is ../adt_rejected. Pure, so no `--feature-zkir-v3`.
+// The test only checks the digest is 32 bytes, is the same every time, and
+// differs for different inputs. Encodings are in ../field_types.
+//
+// All the circuits are pure, so no feature flag is needed.
 
 struct Mixed { tag: Bytes<8>, count: Uint<64>, flag: Boolean }
 

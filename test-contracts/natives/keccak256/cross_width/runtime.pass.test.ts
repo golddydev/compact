@@ -20,8 +20,8 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { fillerBytes, runKat, widthCircuit } from '@test/crypto';
 
-// The cross-width consequence of no-trim: `hashBytes<wide>(x ++ 0x00...)` must
-// DIFFER from `hashBytes<narrow>(x)`.
+// A wider value padded with zeros must not hash the same as the narrower one,
+// because those zeros are hashed too.
 const pairs = [
     { wide: 33, narrow: 32, note: 'one padding zero' },
     {
@@ -41,7 +41,7 @@ export default defineRuntimeTest<typeof Contract, PureCircuits>(
             pairs,
             ({ wide, narrow }) => `Bytes<${wide}> vs Bytes<${narrow}>`,
             ({ wide, narrow, note }) => {
-                // An all-nonzero prefix, zero-padded up to the wider width.
+                // The same bytes, padded out to the wider size.
                 const prefix = fillerBytes(narrow);
                 const padded = new Uint8Array(wide);
                 padded.set(prefix);

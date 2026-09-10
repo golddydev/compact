@@ -15,5 +15,5 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// Pure circuits, so keccak256 never reaches zkir and no feature flag applies.
+// All pure, so no feature flag is needed.
 export default defineCompileTest(import.meta.url);

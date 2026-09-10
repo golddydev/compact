@@ -15,6 +15,5 @@
 
 import { defineCompileTest } from '@test/compact-test';
 
-// `persistentHash` is a core stdlib circuit and every circuit here is pure, so
-// nothing reaches zkir and no feature flag is needed.
+// All pure, and persistentHash needs no feature flag.
 export default defineCompileTest(import.meta.url);

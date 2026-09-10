@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The observable consequence of the no-trim behaviour across widths: a
-// `Bytes<N>` holding a zero-padded copy of a narrower `Bytes<M>` hashes
-// DIFFERENTLY.
+// Because the zeros at the end are hashed, a wider value holding the same
+// bytes padded with zeros gets a different digest from the narrower one.
+//
+// These are just the widths the test compares. Pure, so no feature flag.
 
 pragma language_version >= 0.25.0;
 

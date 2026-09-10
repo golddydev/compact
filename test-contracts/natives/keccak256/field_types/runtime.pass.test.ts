@@ -21,12 +21,12 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { runKat } from '@test/crypto';
 
-/** A `Field` atom: 32 bytes, little-endian, zero-padded, never trimmed. */
+/** A Field is 32 bytes, little-endian, padded with zeros. */
 function fieldToKeccakInput(value: bigint): Uint8Array {
     return numberToBytesLE(value, 32);
 }
 
-/** A `Vector<3, Field>`: the three 32-byte encodings concatenated, 96 bytes. */
+/** Three Fields end to end, so 96 bytes. */
 function vector3ToKeccakInput(values: readonly bigint[]): Uint8Array {
     return concatBytes(...values.map(fieldToKeccakInput));
 }

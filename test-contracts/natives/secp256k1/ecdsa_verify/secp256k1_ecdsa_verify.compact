@@ -13,22 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The secp256k1 ECDSA verification path: the `Secp256k1EcdsaSignature` struct,
-// the `Secp256k1Point` type, and the `secp256k1EcdsaVerify` circuit.
+// The secp256k1 signature check.
 //
-//   w = s^-1; u1 = e*w; u2 = r*w; P = u1*G + u2*pk; valid iff P.x == r
+// The digest is passed in rather than hashed here, so this covers only the
+// curve maths. Hashing and checking together is ../bitcoin_kat.
 //
-// `msgHash` is taken as a parameter rather than hashed in-circuit, so this
-// isolates the curve and scalar arithmetic from any hash. The full Bitcoin
-// flow, hashing in-circuit, is ../bitcoin_kat.
+// The digest goes in big-endian; the library flips it internally.
 //
-// ENDIANNESS: an ECDSA message representative is a BIG-endian integer, and
-// `secp256k1EcdsaVerify` reverses it internally (`hashToSecp256k1Scalar`, for
-// the `as Secp256k1Scalar` cast). So the big-endian digest passes straight
-// through with no caller-side reversal.
-//
-// Pure -- no ledger -- so it is computed off-chain and generates no proving
-// keys, but it still needs `--feature-zkir-v3` for the library itself.
+// Pure, so no keys are generated, but the v3 flag is still needed.
 
 pragma language_version >= 0.25.0;
 
