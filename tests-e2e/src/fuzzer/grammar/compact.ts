@@ -13,47 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
- * The Compact fuzzer grammar. One table, one file, grouped by language category.
- *
- * Every production and every literal Compact token lives here. Nothing else
- * spells Compact syntax: shapes.ts is list combinators with no Compact in them,
- * index.ts assembles and checks, utils/ generates the terminals. The grammar used
- * to be spread over fifteen modules plus the helpers and the entry-point map, and
- * it drifted.
- *
- *   TERMINALS      produced by utils/generators.ts; declared here so they can be checked
- *   ENTRY_POINTS   which nonterminal each fuzzer starts from
- *   constructors   the syntax shapes the language repeats (calls, bindings, ...)
- *   harness        the contract each fuzzer wraps around what it is testing
- *   lexical        terminators, separators, keywords, operators
- *   types          std and ledger types, generics
- *   declarations   pragma, import, include, module, ledger, witness, struct, enum,
- *                  constructor, circuit
- *   statements     bindings, if, for, return, assert
- *   expressions    conditions and operands
- *   ledgerAdts     Kernel, Counter, Set, Map, List, MerkleTree, HistoricMerkleTree
- *   stdlib         standard library and native circuits
- *
- */
 
 import { Alternative, Token, Grammar } from './types';
-import { join } from './shapes';
+
+/* Centralized grammar: keep Compact syntax and production definitions here. */
 
 /* ================================================================== *
  * Terminals and entry points
  * ================================================================== */
 
-/*
- * Produced by a generator in utils/generators.ts rather than by a production here.
- * This list is the single source of truth: `TERMINAL_GENERATORS` there is typed as
- * `Record<Terminal, ...>`, so adding a name here without writing its generator (or
- * the reverse) is a compile error rather than a token emitted as literal text.
- */
+/* `TERMINAL_GENERATORS` is typed against this list. */
 export const TERMINALS = [
     'random_version', 'random_string', 'random_number', 'very_small_random_number',
     'small_random_number', 'random_table', 'random_mixed_table',
-    'generate_nested_for', 'generate_nested_if', 'generate_modules', 'generate_large_enum',
 ] as const;
 
 export type Terminal = (typeof TERMINALS)[number];
@@ -76,7 +48,6 @@ export const ENTRY_POINTS = {
     witness: 'witness_statements',
 } as const;
 
-/** The fuzzers, named by their entry nonterminal above. */
 export type FuzzerName = keyof typeof ENTRY_POINTS;
 
 /* ================================================================== *
@@ -88,13 +59,10 @@ export type FuzzerName = keyof typeof ENTRY_POINTS;
 
 const contract = (...parts: Token[]): Alternative => ['import CompactStandardLibrary;', 'line_separator', ...parts];
 
+const join = (nodes: Token[], separator: Token): Token[] => nodes.flatMap((node, i) => (i ? [separator, node] : [node]));
+
 const generics = (nodes: Token[]): Token[] => (nodes.length ? ['<', ...join(nodes, ','), '>'] : []);
 
-/*
- * Calls take an explicit argument list rather than one node repeated `arity`
- * times: the arguments of a call are independent, and the hand-written grammar
- * this table replaced varied them independently. Use `same()` for the uniform case.
- */
 const call = (name: Token, genericNodes: Token[], argNodes: Token[]): Alternative =>
     [name, ...generics(genericNodes), '(', ...join(argNodes, ', '), ')'];
 
@@ -103,13 +71,6 @@ const method = (receiver: Token, op: Token, argNodes: Token[]): Alternative =>
 
 const same = (node: Token, arity: number): Token[] => Array.from({ length: arity }, () => node);
 
-/**
- * Argument lists of length `arity` drawn from `choices`: every argument the same,
- * plus -- for arity > 1 -- every list with a single argument switched, and -- for
- * arity > 2 -- the alternating lists. The full cross product is exponential and,
- * for a fuzzer, mostly redundant; these are the shapes the old per-call lists
- * spelled out by hand (for arity 2 it is exactly the four they listed).
- */
 const argLists = (arity: number, choices: Token[]): Token[][] => {
     if (arity === 0) return [[]];
     const lists = choices.map((choice) => same(choice, arity));
@@ -139,7 +100,6 @@ const argLists = (arity: number, choices: Token[]): Token[][] => {
     });
 };
 
-/* Somewhere the grammar wants an identifier: a name, a prefix, a parameter. */
 const identifierPosition = (extra: Alternative[] = []): Alternative[] => [
     ['random_string'],
     ['random_keyword'],
@@ -149,8 +109,7 @@ const identifierPosition = (extra: Alternative[] = []): Alternative[] => [
     ...extra,
 ];
 
-/* The value shapes a generated `const` can bind, without their terminator. */
-const BINDING_VALUES: Record<string, (name: Token, typeNode: Token) => Alternative> = {
+const BINDING_VALUES = {
     default: (n, t) => ['const ', n, ' = ', 'default<', t, '>'],
     typedDefault: (n, t) => ['const ', n, ' : ', t, ' = ', 'default<', t, '>'],
     pad: (n) => ['const ', n, ' = ', 'pad(', 'random_number', ', "', 'random_string', '")'],
@@ -159,20 +118,13 @@ const BINDING_VALUES: Record<string, (name: Token, typeNode: Token) => Alternati
     string: (n) => ['const ', n, ' = ', 'random_string'],
     sliceOfDefault: (n, t) => ['const ', n, ' = ', 'slice<', 'random_number', '>(default<', t, '>, ', 'random_number', ')'],
     sliceOfTuple: (n) => ['const ', n, ' = ', 'slice<', 'random_number', '>([', 'random_mixed_table', '], ', 'random_number', ')'],
-    // slice() takes a value; a type there cannot parse
     sliceOfType: (n, t) => ['const ', n, ' = ', 'slice<', 'random_number', '>(', t, ', ', 'random_number', ')'],
     spreadSliceOfType: (n, t) => ['const ', n, ' = ', '[...slice<', 'random_number', '>(', t, ', ', 'random_number', ')]'],
-};
+} satisfies Record<string, (name: Token, typeNode: Token) => Alternative>;
 
-/*
- * How each shape terminates. These bindings are the preamble that sets up the
- * statement under test, so a shape terminated with `valid_end_line` always reaches
- * it, while one terminated with `end_line` is invalid half the time by design.
- * Giving every shape the fuzzed terminator looks tidier but costs coverage
- * geometrically: it takes a four-binding preamble from always valid to 1 in 16,
- * so the statement being fuzzed is almost never reached.
- */
-const BINDING_TERMINATOR: Record<string, Token> = {
+type BindingKind = keyof typeof BINDING_VALUES;
+
+const BINDING_TERMINATOR: Record<BindingKind, Token> = {
     default: 'valid_end_line',
     typedDefault: 'valid_end_line',
     pad: 'valid_end_line',
@@ -185,31 +137,21 @@ const BINDING_TERMINATOR: Record<string, Token> = {
     spreadSliceOfType: 'end_line',
 };
 
-const bindings = (name: Token, kinds: string[], typeNode: Token = 'valid_types', terminator?: Token): Alternative[] =>
+const bindings = (name: Token, kinds: BindingKind[], typeNode: Token = 'valid_types', terminator?: Token): Alternative[] =>
     kinds.map((kind) => [...BINDING_VALUES[kind](name, typeNode), terminator ?? BINDING_TERMINATOR[kind]]);
 
-const ASSERT_BINDINGS = ['default', 'pad', 'spreadSliceOfType', 'sliceOfType', 'sliceOfDefault'];
-const IF_BINDINGS = ['default', 'typedDefault', 'smallNumber', 'number', 'string', 'sliceOfType', 'sliceOfDefault'];
-const STATEMENT_BINDINGS = ['default', 'smallNumber'];
+const ASSERT_BINDINGS: BindingKind[] = ['default', 'pad', 'spreadSliceOfType', 'sliceOfType', 'sliceOfDefault'];
+const IF_BINDINGS: BindingKind[] = ['default', 'typedDefault', 'smallNumber', 'number', 'string', 'sliceOfType', 'sliceOfDefault'];
+const STATEMENT_BINDINGS: BindingKind[] = ['default', 'smallNumber'];
 const STATEMENT_TYPE = 'statement_valid_types';
 
-/*
- * The names the `std` and `single` preambles bind, in the order they are bound.
- * They are the operands every statement under test draws on, so this one list
- * drives the bindings themselves, the `statement_variable` operand, and the
- * literal argument lists of the ledger calls below.
- */
 const PREAMBLE_VARS: Token[] = ['bob', 'tom', 'greg', 'adonis'];
 
-/**
- * One binding production per preamble name, all sharing a set of shapes.
- * `extra` adds shapes to a single binding, by index.
- */
 const preambleBindings = (
     prefix: string,
     count: number,
-    kinds: string[],
-    options: { typeNode?: Token; terminator?: Token; extra?: Record<number, string[]> } = {},
+    kinds: BindingKind[],
+    options: { typeNode?: Token; terminator?: Token; extra?: Record<number, BindingKind[]> } = {},
 ): Grammar =>
     Object.fromEntries(
         PREAMBLE_VARS.slice(0, count).map((name, i) => [
@@ -218,7 +160,6 @@ const preambleBindings = (
         ]),
     );
 
-/** The names of those productions, in binding order, for the body that uses them. */
 const preambleRefs = (prefix: string, count: number): Token[] =>
     PREAMBLE_VARS.slice(0, count).map((name) => `${prefix}${name}`);
 
@@ -235,11 +176,6 @@ const genericTypes = (v: Token): Alternative[] => [
     ['Vector<', v, ', ', v, '>'], ['Maybe<', v, '>'], ['Either<', v, ',', v, '>'],
     ['MerkleTreePath<', v, ',', v, '>'],
 ];
-/*
- * Where a std type writes a size. The `statement_*` family keeps these small and
- * concrete so the contract it lands in still compiles; the `valid_*` family fuzzes
- * them. Everything else about the two lists is identical.
- */
 interface TypeSizes {
     uint: Token;
     range: Token[];
@@ -247,10 +183,6 @@ interface TypeSizes {
     vector: Token;
 }
 
-/*
- * The std types Compact offers -- twenty-one shapes that were two hand-maintained
- * copies of each other, differing only in the sizes above and which list they nest.
- */
 const stdTypes = (self: Token, size: TypeSizes): Alternative[] => [
     ['Boolean'],
     ['Field'],
@@ -275,12 +207,6 @@ const stdTypes = (self: Token, size: TypeSizes): Alternative[] => [
     ['[]'],
 ];
 
-/*
- * The ledger ADTs as types. `element` is what the single-element ADTs nest; Map
- * takes its key and value separately because the two callers do not agree on
- * either -- the statement family writes `Map<std, valid>`, the fuzzing family
- * `Map<valid, std>`.
- */
 const ledgerTypes = (element: Token, mapKey: Token, mapValue: Token, size: Token): Alternative[] => [
     ['Kernel'],
     ['Counter'],
@@ -291,11 +217,9 @@ const ledgerTypes = (element: Token, mapKey: Token, mapValue: Token, size: Token
     ['HistoricMerkleTree<', size, ', ', element, '>'],
 ];
 
-/* What an `import`/`prefix` clause will accept where a library name belongs. */
 const libraryName: Alternative[] = identifierPosition([
     ['CompactStandardLibrary'],
     ['"CompactStandardLibrary"'],
-    // `valid_types` was written `valid_type`, undefined, and emitted as literal text
     ['valid_types'],
     ['random_number', ' ', 'random_operator', ' ', 'random_number'],
 ]);
@@ -310,12 +234,6 @@ const returnStatements = (self: Token): Alternative[] => [
 ];
 const commaList = (item: Alternative, self: Token): Alternative[] => [item, [...item, ', ', self]];
 
-/*
- * The ledger ADTs the statement fuzzers exercise, and the type each is declared
- * with. `kernel` is ambient -- there is nothing to declare -- so its type is empty.
- * The `std` preamble, the per-ADT `single` preambles and the ADT call productions
- * are all generated from this one map, so they cannot drift apart.
- */
 const LEDGER_ADT_TYPES: Record<string, Token[]> = {
     kernel: [],
     counter: ['Counter'],
@@ -326,7 +244,6 @@ const LEDGER_ADT_TYPES: Record<string, Token[]> = {
     hmt: ['HistoricMerkleTree<', '20', ',', 'statement_std_types', '>'],
 };
 
-/* The ADTs that need a declaration to be usable -- every one but the kernel. */
 const DECLARED_ADTS = Object.entries(LEDGER_ADT_TYPES).filter(([, type]) => type.length > 0);
 
 const adtDeclaration = (adt: string, type: Token[]): Alternative =>
@@ -337,45 +254,33 @@ const adtDeclaration = (adt: string, type: Token[]): Alternative =>
  * ================================================================== */
 
 const harness: Grammar = {
-    // entry point #2
     statements: [
         ['import CompactStandardLibrary;', 'line_separator', 'statement_variables', 'statement_declaration', 'statement_body'],
     ],
-    // the same declarations the `single` fuzzers use, all of them at once
     statement_variables: [DECLARED_ADTS.flatMap(([adt, type]) => adtDeclaration(adt, type))],
     statement_declaration: [['constructor()'], ['export circuit test(): []']],
     statement_body: [['{\n ', ...preambleRefs('binding_', 4), 'statement', 'after_statement', '\n}']],
     assert_statements: [contract('constructor_harness', 'assert_body')],
     assert_body: [['{\n ', ...preambleRefs('assert_binding_', 2), 'assert_statement', '\n}']],
     if_statements: [contract('constructor_harness', 'if_body')],
-    if_body: [
-        ['{\n ', ...preambleRefs('if_binding_', 3), 'if_statement', '\n}'],
-        // ['{\n ', 'generate_nested_if', '\n}'],
-    ],
+    if_body: [['{\n ', ...preambleRefs('if_binding_', 3), 'if_statement', '\n}']],
     for_statements: [
         contract('constructor_harness', 'for_body'),
         contract('counter_declaration', 'constructor_harness', 'for_body'),
     ],
-    for_body: [
-        ['{\n', 'for_loop_range', '\n}'],
-        // ['{\n', 'generate_nested_for', '\n}'],
-    ],
+    for_body: [['{\n', 'for_loop_range', '\n}']],
     constructor_statements: [contract('constructor_declaration', 'constructor_body')],
     constructor_body: [['{\n ', 'fixed_assert_statement', 'constructor_return_statements', '\n}']],
-    // assert, if and for all wrap their statement under test in the same contract
     constructor_harness: [['constructor()']],
     circuit_statements: [
-        // `circuit_declaration` has no block, but a circuit definition requires one
-        contract('optional_circuit', ' ', 'circuit_declaration'),
-        ['optional_circuit', ' ', 'circuit_declaration'],
-        contract('valid_optional_circuit', 'circuit_declaration_with_body', 'circuit_body'),
-        // struct hoisted above the circuit, so a body may reference var_struct
+        contract('invalid_circuit_modifier', ' ', 'circuit_declaration'),
+        ['invalid_circuit_modifier', ' ', 'circuit_declaration'],
+        contract('valid_circuit_modifier', 'circuit_declaration_with_body', 'circuit_body'),
     ],
     circuit_body: [
-        ['{\n ', 'fixed_assert_statement', 'circuit_return_statements', '\n}'], 
+        /* Struct declarations here are deliberate invalid-program cases. */
+        ['{\n ', 'fixed_assert_statement', 'circuit_return_statements', '\n}'],
         ['{\n ', 'circuit_multi_const_statements', 'circuit_return_statements', '\n}'],
-        // a struct declaration is a program element, not a statement: it cannot sit
-        // inside a circuit body. The twins below rely on the hoisted form above.
         ['{\n ', 'struct_decl', 'circuit_multi_const_statements_struct', 'circuit_return_statements', '\n}'],
         ['{\n ', 'struct_decl', 'circuit_spread_statements', 'circuit_return_statements', '\n}'],
         ['{\n ', 'struct_decl', 'circuit_map_fold_statements', 'circuit_return_statements', '\n}'],
@@ -386,26 +291,13 @@ const harness: Grammar = {
         contract('export ', 'witness_declaration'),
         contract('witness_declaration'),
     ],
-    ledger_statements: [
+        ledger_statements: [
         ['import CompactStandardLibrary;', 'line_separator', 'optional_modifier', ' ledger ', 'random_string', ': ', 'compact_types', 'end_line'],
-        // ['optional_modifier', 'ledger ', 'random_string', ': ', 'compact_types', 'end_line', 'ledger_statements'],
     ],
-    module_statements: [
-        // ['generate_modules'],
-        ['module_statement'],
-    ],
-    pragma_statements: [
-        ['pragma ', 'pragma_constraints', 'end_line'],
-        // ['pragma ', 'pragma_constraints', 'end_line', 'pragma_statements'],
-    ],
-    import_statements: [
-        ['import_statement'],
-        // ['import_statement', 'import_statements']
-    ],
-    include_statements: [
-        ['include_statement'],
-        // ['include_statement', 'include_statements']
-    ],
+    module_statements: [['module_statement']],
+    pragma_statements: [['pragma ', 'pragma_constraints', 'end_line']],
+    import_statements: [['import_statement']],
+    include_statements: [['include_statement']],
 };
 
 /* ================================================================== *
@@ -724,7 +616,6 @@ const lexical: Grammar = {
 const types: Grammar = {
     compact_types: [
         ['valid_types'],
-        // `as` is an expression cast; it cannot appear in a type position
         ['valid_types', ' as ', 'valid_types'],
         ['valid_types', ' as ', 'invalid_types'],
         ['invalid_types'],
@@ -741,9 +632,6 @@ const types: Grammar = {
     ],
     valid_types: [['valid_std_types'], ['valid_ledger_types']],
     invalid_types: [['invalid_std_types'], ['invalid_ledger_types']],
-    // shared by circuit and constructor bodies. An empty ending leaves `return`
-    // unterminated before the closing brace, which cannot parse.
-    // circuit and witness had identical copies of both of these
     generic_value: genericValues,
     generic_type: genericTypes('generic_value'),
     module_generic_value: [
@@ -756,7 +644,6 @@ const types: Grammar = {
         ['#A, #B, #C, #D, #E, #F, #G, #H, #I, #J, #K, #L, #M, #N, #O, #U, #P, #Q, #R, #S, #T, #U, #V, #W, #X'],
     ],
     statement_valid_types: [['statement_ledger_types'], ['statement_std_types']],
-    // sizes fixed and small: these types have to compile
     statement_std_types: stdTypes('statement_std_types', {
         uint: '254',
         range: ['0', '..', 'small_random_number'],
@@ -764,7 +651,6 @@ const types: Grammar = {
         vector: '20',
     }),
     statement_ledger_types: ledgerTypes('statement_std_types', 'statement_std_types', 'statement_valid_types', '20'),
-    // the same shapes with every size fuzzed
     valid_std_types: stdTypes('valid_std_types', {
         uint: 'random_number',
         range: ['random_number', '..', 'random_number'],
@@ -813,13 +699,7 @@ const types: Grammar = {
  * ================================================================== */
 
 const declarations: Grammar = {
-    /*
-     * The grammar is `pragma <id> <version-expr>;` -- one identifier followed by a
-     * single version expression. `&&` and `||` join version *terms* inside that
-     * expression, so they cannot join two `language_version ...` constraints, and a
-     * general binary operator is not a version operator.
-     */
-    pragma_constraints: [
+        pragma_constraints: [
         ['pragma_constraint'],
         ['pragma_constraints', ' ', 'random_operator', ' ', 'pragma_constraint'],
     ],
@@ -846,7 +726,6 @@ const declarations: Grammar = {
         ['import ', 'import_library', 'end_line'],
         ['import ', 'import_library', ' prefix ', 'prefix_string', 'end_line'],
     ],
-    // an imported library and an import prefix accept the same operands
     import_library: libraryName,
     prefix_string: libraryName,
     include_statement: [
@@ -854,12 +733,7 @@ const declarations: Grammar = {
         ['random_string', ' include ', 'include_file', 'end_line'],
         ['include ', 'include_file', 'end_line'],
     ],
-    /*
-     * `include` takes a string literal -- the grammar is `include <file> ;` where
-     * <file> is the string-literal terminal. Every unquoted operand below is a parse
-     * error, which is why this fuzzer never got past the parser at all.
-     */
-    include_file: [
+        include_file: [
         ['CompactStandardLibrary'],
         ['path/to/file'],
         ['//path//to//file'],
@@ -878,18 +752,15 @@ const declarations: Grammar = {
         ['module ', 'module_name', ' {', 'line_separator', '}', 'line_separator'],
         ['module ', 'module_name', '<', 'module_params', '>', ' {', 'line_separator', '}', 'line_separator'],
         ['module ', 'module_name', '<', 'module_generic_value', ',', 'module_generic_value', '>', ' {', 'line_separator', '}', 'line_separator'],
-        // a generic parameter list is angle-bracketed
         ['module ', 'module_name', '[', 'module_params', ']', ' {', 'line_separator', '}', 'line_separator'],
         ['module ', 'module_name', '(', 'module_params', ')', ' {', 'line_separator', '}', 'line_separator'],
         ['module ', 'module_name', '{', 'module_params', '}', ' {', 'line_separator', '}', 'line_separator'],
     ],
-    // a generic parameter is `T` or `#N`; a module name is an identifier
     module_params: [
         ...identifierPosition([['compact_types'], ['random_number', ' ', 'random_operator', ' ', 'random_number']]),
         ['random_string', ', ', 'module_params'],
     ],
     module_name: identifierPosition([['compact_types'], ['random_number', ' ', 'random_operator', ' ', 'random_number']]),
-    // the grammar is (OPT export) (OPT sealed) ledger -- in that order
     optional_modifier: [
         [''],
         ['export'],
@@ -937,15 +808,12 @@ const declarations: Grammar = {
         ['  ', 'random_keyword', ': ', 'valid_types'],
         ['  ', 'random_string', ': ', 'compact_types'],
     ],
-    // the struct that circuit bodies and the struct fuzzer both declare
     struct_decl: [['struct ', 'var_struct', ' {\n', 'struct_decl_fields', '\n}', 'valid_end_line']],
     struct_decl_fields: [['  ', 'random_string', ': ', 'valid_types']],
     enum_definition: [
         ['enum ', 'enum_name', ' {\n', 'enum_values', '}', 'end_line'],
         ['export enum ', 'enum_name', ' {\n', 'enum_values', '}', 'end_line'],
-        // ['generate_large_enum'],
     ],
-    // an enum name and its members are identifiers
     enum_name: identifierPosition(),
     enum_values: [
         ...identifierPosition().map((alternative) => prefix('  ', alternative, 'line_separator')),
@@ -963,9 +831,8 @@ const declarations: Grammar = {
         ['random_string', ' : ', 'constructor_param_types', ', ', 'constructor_params'],
     ],
     constructor_param_types: identifierPosition([['compact_types']]),
-    optional_circuit: [['random_keyword'], ['random_string'], ['optional_circuit']],
-    // the grammar is (OPT export) (OPT pure) circuit -- in that order, at most once each
-    valid_optional_circuit: [['export '], ['pure '],   ['valid_optional_circuit']],
+        invalid_circuit_modifier: [['random_keyword'], ['random_string']],
+        valid_circuit_modifier: [[''], ['export '], ['pure '], ['export pure ']],
     circuit_declaration: [
         ['circuit ', 'random_string', '(): ', 'contaminated_compact_types', 'end_line'],
         ['circuit ', 'random_keyword', '(): ', 'contaminated_compact_types', 'end_line'],
@@ -994,13 +861,11 @@ const declarations: Grammar = {
  * ================================================================== */
 
 const statements: Grammar = {
-    // circuit and constructor bodies both open with this same fixed assertion
     fixed_assert_statement: assertStatement,
     constructor_return_statements: returnStatements('constructor_return_statements'),
     circuit_return_statements: returnStatements('circuit_return_statements'),
     circuit_spread_statements: [
         ['const a', ' = [...slice<', 'random_number', '>(', 'valid_types' , ', ', 'random_number', ')]', 'end_line'],
-        // a type is not a binding name, nor an expression
         ['const [', 'valid_types', ', ', 'valid_types', '] = ', '[...', 'valid_types', ', ', '...', 'valid_types', ']', 'end_line' ],
         ['const a', ' = [...', 'random_string', ', ...', 'random_number', ']', 'end_line' ],
         ['const a', ' = [...[', 'random_string', '], ...[', 'random_number', ']]', 'end_line' ],
@@ -1008,7 +873,6 @@ const statements: Grammar = {
         ['const a', ' = [...[', 'random_table', '], ...[', 'random_mixed_table', ']]', 'end_line' ],
     ],
     circuit_multi_const_statements: [
-        // random_mixed_table is unbracketed, so its commas continue the const binding list
         ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ' = ', 'random_number', ', ', 'random_string', ' = ', 'random_mixed_table', 'end_line'],
         ['const ', 'random_string', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ' = ', 'small_random_number', ', ', 'random_string', ' = ', 'random_keyword', 'end_line'],
         ['const ', 'random_string', ':', 'valid_types', ' = ', 'default<', 'valid_types', '>', ', ' , 'random_string', ':', 'valid_types', ' = ', 'random_number', ', ', 'random_string', ':', 'valid_types', ' = ', 'random_keyword', 'end_line'],
@@ -1017,7 +881,6 @@ const statements: Grammar = {
         ['const ', 'random_string', ' = ', 'default<', 'var_struct', '>', ', ' , 'random_string', ' = ', 'random_string', ', ', 'random_string', ' = ', 'random_number', 'end_line'],
     ],
     circuit_map_fold_statements: [
-        // the trailing operands are types, and map/fold take expressions there
         ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'valid_types' , ')', 'valid_end_line'],
         ['const a = ', 'fold(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'random_number', ', ', 'default<', ', ', 'valid_types' , '>)', 'valid_end_line'],
         ['const a = ', 'map(', 'a:', 'valid_types', ', x:', 'valid_types', '):', 'valid_types', '=> a + x, ', 'valid_types', ', ', 'valid_types' , ')', 'valid_end_line'],
@@ -1027,25 +890,20 @@ const statements: Grammar = {
     assert_statement: [
         ['assert (', 'assert_condition', ', "', 'random_string', '")', 'end_line'],
         ['assert (', 'random_keyword', ', "', 'random_string', '")', 'end_line'],
-        // unbalanced quote / missing comma
         ['assert (', 'assert_condition', ' ', 'random_keyword', '")', 'end_line'],
         ['assert (', 'assert_condition', 'random_keyword', 'random_string', '")', 'end_line'],
         ['random_keyword', ' ', 'assert (', 'assert_condition', ', "', 'random_string', '")', 'end_line'],
     ],
-    // the third binding also gets the tuple form
     ...preambleBindings('if_binding_', 3, IF_BINDINGS, { extra: { 2: ['sliceOfTuple'] } }),
     if_statement: [
-        // Compact has no empty statement, so `if (...) {};` cannot parse; and joining
-        // two conditions with a second relational operator chains them, which the
-        // non-associative expr3 rule rejects.
         ['if (', 'if_condition', 'random_operator', 'if_condition', ')', '{}', 'end_line'],
         ['if (', 'if_condition', 'random_operator', 'if_condition', ')', '{}', 'end_line', 'if_statement'],
     ],
     for_loop_range: [
+        /* Keep range bounds small: the compiler unrolls loops. */
         ['for (const ', 'bob', ' of ', 'very_small_random_number', '..', 'very_small_random_number', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'counter_operation', ') {\n', '}\n'],
-        // ['for (const ', 'bob', ' of ', 'small_random_number', '..', 'small_random_number', ') {\n', '}\n'],
-        ['for (const ', 'bob', ' of ', '[', 'random_table', ']) {\n', '}\n'],
+                ['for (const ', 'bob', ' of ', '[', 'random_table', ']) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', '[', 'valid_types', ']) {\n', '}\n'],  // a type is not an expression
         ['for (const ', 'bob', ' of ', '[', 'default<', 'valid_types', '>]) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', '[', 'random_keyword', ']) {\n', '}\n'],
@@ -1057,7 +915,6 @@ const statements: Grammar = {
         ['for (const ', 'bob', ' of ', 'random_version', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'valid_types', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'default<', 'valid_types', '>) {\n', '}\n'],
-        // a range bound is a type size (a nat or an id), not a cast expression
         ['for (const ', 'bob', ' of ', 'random_number', ' as Uint<455>', '..', 'random_number', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'random_number', '..', 'random_number', ' as Uint<455>', ') {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'random_string', ') {\n', '}\n'],
@@ -1065,24 +922,11 @@ const statements: Grammar = {
         ['for (const ', 'bob', ' of ', 'slice<', 'random_number', '>(default<', 'valid_types', '>, ', 'random_number', ')) {\n', '}\n'],
         ['for (const ', 'bob', ' of ', 'slice<', 'random_number', '>(', 'random_table', ', ', 'random_number', ')) {\n', '}\n'],
     ],
-    /*
-     * These four are the operands of the ledger statement under test, so they
-     * always terminate validly: a fuzzed terminator here would only ever stop the
-     * contract short of the statement it exists to exercise.
-     */
-    ...preambleBindings('binding_', 4, STATEMENT_BINDINGS, {
+        ...preambleBindings('binding_', 4, STATEMENT_BINDINGS, {
         typeNode: STATEMENT_TYPE,
         terminator: 'valid_end_line',
     }),
-    /*
-     * These were named for the ADT alone -- `kernel`, `counter`, `set` -- which
-     * collided with the language's own words: `counter_operation` emits a literal
-     * `counter` referring to the ledger counter the `for` harness declares, and
-     * once a production claimed that name the literal expanded into a whole
-     * statement instead. Prefixed names cannot collide, and unlike a bare word
-     * they are checkable: `validate()` only inspects tokens containing `_`.
-     */
-    statement: Object.keys(LEDGER_ADT_TYPES).map((adt) => [`adt_${adt}`]),
+        statement: Object.keys(LEDGER_ADT_TYPES).map((adt) => [`adt_${adt}`]),
     optional_statement_variable: [['const adam = ']],
     after_statement: [
         ['no_variable_after_statement'], ['variable_after_statement'],
@@ -1114,12 +958,9 @@ const statements: Grammar = {
 
 const expressions: Grammar = {
     assert_condition: [
-        // two operands with no operator between them
         ['tom', 'random_string', 'bob'],
         ['tom', ' ', 'random_keyword', ' ', 'bob'],
         ['tom', 'random_operator', 'bob'],
-        // Compact's relational operators are non-associative (expr3 :: expr4 < expr4),
-        // so chaining two of them cannot parse
         ['tom', 'random_operator', 'bob', 'random_operator', 'bob'],
         ['tom', 'random_operator', 'bob', 'random_operator', 'random_mixed_table'],
         ['bob', 'random_operator', 'tom', 'random_operator', 'tom'],
@@ -1164,43 +1005,47 @@ const expressions: Grammar = {
         ['[', 'random_table', ']'],
         ['random_keyword'],
     ],
-    // whatever the preamble bound, referred to as an operand
     statement_variable: PREAMBLE_VARS.map((name) => [name]),
 };
 
 /* ================================================================== *
  * ledger ADTs
  *
- * `mint` and `pathFoLeaf` are stale -- `mint` was renamed `mintShielded`, and
- * `pathFoLeaf` misspells a method that is TypeScript-only anyway. Both are kept
- * so this reorganisation changes no coverage; they are a backlog item.
+ * The Compact-callable surface is examples/camelCase/all/ledger.compact, which is
+ * exhaustive; this table is checked against it. Three kinds of entry here are not
+ * on that list and are meant to stay:
+ *
+ *   deprecated aliases -- `check_root` is the snake_case spelling the compiler
+ *     still accepts (compiler/standard-library-aliases.ss). It sits beside
+ *     `checkRoot` so both paths are exercised.
+ *   TypeScript-only    -- `findPathForLeaf`, `firstFree`, `root`, `history` exist
+ *     on the ledger in TS but are not callable from Compact. Calling one is a
+ *     negative test: the compiler should reject it.
+ *   stale on purpose   -- `mint` (renamed `mintShielded`) and `pathFoLeaf` (a
+ *     misspelling) should both be rejected, so they are worth generating.
  * ================================================================== */
 
+/* Includes supported operations plus intentional negative cases. */
 const LEDGER_OPS: Record<string, string[]> = {
-    kernel: ['checkpoint', 'claimContractCall', 'claimZswapCoinReceive', 'claimZswapCoinSpend',
-             'claimZswapNullifier', 'mint', 'self'],
+    kernel: ['balance', 'balanceGreaterThan', 'balanceLessThan', 'checkpoint', 'claimContractCall',
+             'claimUnshieldedCoinSpend', 'claimZswapCoinReceive', 'claimZswapCoinSpend',
+             'claimZswapNullifier', 'incUnshieldedInputs', 'incUnshieldedOutputs', 'mint',
+             'mintShielded', 'mintUnshielded', 'self'],
     counter: ['decrement', 'increment', 'lessThan', 'read', 'resetToDefault'],
     set: ['insert', 'insertCoin', 'isEmpty', 'member', 'remove', 'resetToDefault', 'size'],
     map: ['insert', 'insertCoin', 'insertDefault', 'isEmpty', 'lookup', 'member', 'remove',
           'resetToDefault', 'size'],
     list: ['head', 'isEmpty', 'length', 'popFront', 'pushFront', 'pushFrontCoin', 'resetToDefault'],
     mt: ['checkRoot', 'findPathForLeaf', 'firstFree', 'insert', 'insertHash', 'insertHashIndex',
-         'insertIndex', 'insertIndexDefault', 'pathFoLeaf', 'resetToDefault', 'root'],
-    hmt: ['check_root', 'findPathForLeaf', 'firstFree', 'history', 'insert', 'insertHash',
-          'insertHashIndex', 'insertIndex', 'insertIndexDefault', 'pathFoLeaf', 'resetToDefault',
-          'root'],
+         'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf', 'resetToDefault', 'root'],
+    hmt: ['checkRoot', 'check_root', 'findPathForLeaf', 'firstFree', 'history', 'insert', 'insertHash',
+          'insertHashIndex', 'insertIndex', 'insertIndexDefault', 'isFull', 'pathFoLeaf',
+          'resetHistory', 'resetToDefault', 'root'],
 };
 
-/*
- * Operations whose literal-argument form takes more than the default two
- * arguments. Keyed by `adt.op` because the arity is a property of the operation on
- * that ADT: `map.insert` takes a key and a value where `set.insert` takes only a
- * member. Over-applying an operation is the point -- these are the calls that
- * should be rejected -- so the arity here is the widest form to emit, not the
- * correct one.
- */
 const WIDE_ARITY: Record<string, number> = {
     'kernel.claimContractCall': 4,
+    'kernel.claimUnshieldedCoinSpend': 4,
     'kernel.mint': 3,
     'set.insertCoin': 4,
     'map.insert': 3,
@@ -1214,7 +1059,6 @@ const WIDE_ARITY: Record<string, number> = {
     'hmt.pathFoLeaf': 3,
 };
 
-/* The kernel is ambient: it is addressed by name, not through a declared var. */
 const receiverFor = (adt: string): Token => (adt === 'kernel' ? 'kernel.' : `var_${adt}.`);
 
 const ledgerAdts: Grammar = {
@@ -1233,7 +1077,6 @@ const ledgerAdts: Grammar = {
         return [
             [`adt_${adt}`, [[`variable_${adt}`], [`no_variable_${adt}`]]],
             [`variable_${adt}`, ops.flatMap((op) => [
-                // the declared preamble variables, applied two at a time and wider
                 ...Array.from(
                     { length: (WIDE_ARITY[`${adt}.${op}`] ?? 2) - 1 },
                     (_, i) => method(recv, op, PREAMBLE_VARS.slice(0, i + 2)),
@@ -1242,7 +1085,6 @@ const ledgerAdts: Grammar = {
                 method(recv, op, same('statement_variable', 2)),
             ])],
             [`no_variable_${adt}`, [
-                // an operation this ADT does not have
                 ['optional_statement_variable', recv, 'random_input', '()', 'valid_end_line'],
                 ...ops.flatMap((op) => [
                     method(recv, op, same('random_input', 0)),
@@ -1263,14 +1105,7 @@ const N = 'small_random_number';
 interface StdlibCall {
     name: Token;
     generics: Token[];
-    /** The call's arity. */
-    args: number;
-    /**
-     * The lowest arity to also emit, for calls the old grammar under-applied on
-     * purpose. Defaults to one below `args`, which is what it spelled out for most
-     * of them; set it equal to `args` for a call it only ever applied fully.
-     */
-    minArgs?: number;
+        args: number;
 }
 
 const STDLIB_CALLS: StdlibCall[] = [
@@ -1313,25 +1148,11 @@ const STDLIB_CALLS: StdlibCall[] = [
     { name: 'createZswapOutput', generics: [], args: 3 },
 ];
 
-/*
- * The arities to emit for a call. Under-applying is a error class of its own, and
- * the grammar this replaced listed the short forms for most calls by hand, so the
- * default runs from one argument up to the call's real arity.
- */
-const arities = (c: StdlibCall): number[] => {
-    const min = c.minArgs ?? 1;
-    return Array.from({ length: Math.max(0, c.args - min + 1) }, (_, i) => min + i);
-};
+const arities = (c: StdlibCall): number[] => Array.from({ length: c.args }, (_, i) => i + 1);
 
-/*
- * A generic argument list with its last entry replaced. A wrong generic argument
- * is its own class of error -- distinct from a wrong value argument -- and the
- * grammar this table replaced fuzzed it for every call that takes one.
- */
 const badGenerics = (genericNodes: Token[], node: Token): Token[] =>
     genericNodes.length ? [...genericNodes.slice(0, -1), node] : [];
 
-/* What can stand in an argument position, with and without a preamble to draw on. */
 const VALUE_ARGS: Token[] = ['statement_variable', 'statement_methods'];
 const NO_VALUE_ARGS: Token[] = ['random_input', 'statement_std_types', 'no_variable_statement_methods'];
 const BAD_GENERIC_ARGS: Token[] = ['random_input', 'statement_methods'];
@@ -1339,12 +1160,7 @@ const BAD_GENERIC_ARGS: Token[] = ['random_input', 'statement_methods'];
 const stdlib: Grammar = {
     statement_methods: [['variable_statement_methods'], ['no_variable_statement_methods']],
 
-    /*
-     * Calls whose arguments are the preamble variables, other calls, or a mixture.
-     * Arguments vary independently: `transientCommit<T>(bob, someCall())` reaches a
-     * different path than either all-variable or all-call form.
-     */
-    variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+        variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
         ...arities(c).flatMap((arity) =>
             argLists(arity, VALUE_ARGS).map((args) => call(c.name, c.generics, args)),
         ),
@@ -1357,8 +1173,7 @@ const stdlib: Grammar = {
             : []),
     ]),
 
-    /* The same calls with nothing bound to draw on: junk, types, and other calls. */
-    no_variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+        no_variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
         call(c.name, c.generics, []),
         ...arities(c).flatMap((arity) =>
             NO_VALUE_ARGS.map((node) => call(c.name, c.generics, same(node, arity))),

@@ -16,18 +16,18 @@
 import { ENTRY_POINTS, validate, type FuzzerName } from './grammar';
 import { Fuzzer } from './utils/fuzzer';
 
-/**
- * Generate contracts for every fuzzer.
- *
- * All fuzzers share one grammar table (grammar/compact.ts); a fuzzer is just an
- * entry nonterminal into it.
- *
- * The table is checked first. Every problem `validate()` reports is one that
- * quietly degrades what the fuzzer generates rather than failing -- an undefined
- * nonterminal is emitted as its own name, a production defined twice loses one
- * definition -- so a contract built on a broken table tests nothing, and it is
- * better to stop here than to spend a suite compiling junk.
- */
+export const DEFAULT_CONTRACTS_PER_FUZZER = 1000;
+
+export const MAX_CONTRACTS_PER_FUZZER = 2_000;
+
+export function resolveContractCount(raw: string | undefined): number {
+    const requested = Number(raw);
+    if (!Number.isSafeInteger(requested) || requested < 1 || requested > MAX_CONTRACTS_PER_FUZZER) {
+        return DEFAULT_CONTRACTS_PER_FUZZER;
+    }
+    return requested;
+}
+
 export function generate(outputDir: string, amount: number): void {
     const problems = validate();
     if (problems.length > 0) {
