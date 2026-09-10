@@ -13,15 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/**
- * Collect-then-report driver for known-answer tests.
- *
- * A crypto fixture drives a whole table through one Vitest test, so a plain
- * loop that throws on the first bad vector hides every vector behind it: with
- * 463 Wycheproof signatures or a 37-width digest sweep, "one failure" and "all
- * of them failed" have to look different in the output. `runKat` runs every
- * vector, then fails once with an aggregated message.
- */
+// Runs a whole table of vectors and reports every failure, not just the first.
 
 export type KatOutcome = {
     /** Short vector identity, e.g. `Bytes<62>` or `tcId 388`. */
@@ -39,22 +31,13 @@ export type KatReport = {
 };
 
 export type KatOptions = {
-    /**
-     * Extra lines appended to the summary, for coverage a fixture deliberately
-     * did not drive (skipped encodings, carved malleability vectors). Keeping
-     * them in the summary is what stops coverage being silently overstated.
-     */
+    /** Extra summary lines, so vectors a fixture skipped stay visible. */
     notes?: string[];
     /** Failing vectors named in the thrown message before it elides the rest. */
     sampleSize?: number;
 };
 
-/**
- * Runs `check` over every vector. A vector passes when `check` returns without
- * throwing; the thrown error's message becomes its failure detail.
- *
- * Throws once, at the end, if any vector failed.
- */
+/** Runs every vector, then throws once if any of them failed. */
 export function runKat<V>(
     label: string,
     vectors: readonly V[],
@@ -71,14 +54,52 @@ export function runKat<V>(
             check(vector);
             outcomes.push({ label: vectorLabel, ok: true });
         } catch (error) {
-            outcomes.push({
-                label: vectorLabel,
-                ok: false,
-                detail: error instanceof Error ? error.message : String(error),
-            });
+            outcomes.push(failure(vectorLabel, error));
         }
     }
 
+    return finish(label, outcomes, options);
+}
+
+/** Same as runKat, for checks that await. */
+export async function runKatAsync<V>(
+    label: string,
+    vectors: readonly V[],
+    labelOf: (vector: V) => string,
+    check: (vector: V) => void | Promise<void>,
+    options: KatOptions = {},
+): Promise<KatReport> {
+    const outcomes: KatOutcome[] = [];
+
+    for (const vector of vectors) {
+        const vectorLabel = labelOf(vector);
+
+        try {
+            await check(vector);
+            outcomes.push({ label: vectorLabel, ok: true });
+        } catch (error) {
+            outcomes.push(failure(vectorLabel, error));
+        }
+    }
+
+    return finish(label, outcomes, options);
+}
+
+/** Records one thrown error as a failed vector. */
+function failure(label: string, error: unknown): KatOutcome {
+    return {
+        label,
+        ok: false,
+        detail: error instanceof Error ? error.message : String(error),
+    };
+}
+
+/** Builds the report and throws if anything failed. */
+function finish(
+    label: string,
+    outcomes: KatOutcome[],
+    options: KatOptions,
+): KatReport {
     const report = buildReport(label, outcomes);
 
     if (report.failed.length > 0) {
@@ -88,11 +109,7 @@ export function runKat<V>(
     return report;
 }
 
-/**
- * Groups outcomes into a report. Exposed for fixtures that drive their vectors
- * themselves — the Wycheproof suite classifies failures further before it can
- * decide whether one is a finding — and still want the shared summary shape.
- */
+/** Groups outcomes into a report, for callers that drive their own vectors. */
 export function buildReport(label: string, outcomes: KatOutcome[]): KatReport {
     const failed = outcomes.filter((outcome) => !outcome.ok);
 
@@ -104,9 +121,7 @@ export function buildReport(label: string, outcomes: KatOutcome[]): KatReport {
     };
 }
 
-/**
- * Renders a report as the message of the single error a failed KAT throws.
- */
+/** Turns a report into the message of the one error a failed run throws. */
 export function formatFailure(
     report: KatReport,
     options: KatOptions = {},

@@ -27,6 +27,7 @@ export {
     buildReport,
     formatFailure,
     runKat,
+    runKatAsync,
     type KatOptions,
     type KatOutcome,
     type KatReport,

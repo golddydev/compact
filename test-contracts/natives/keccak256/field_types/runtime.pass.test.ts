@@ -21,10 +21,6 @@ import type { Contract, PureCircuits } from './.build/contract/index.js';
 import { defineRuntimeTest } from '@test/compact-test';
 import { runKat } from '@test/crypto';
 
-// The encoding, not the hash core, is what this fixture pins -- which is exactly
-// the part @noble/hashes cannot answer for itself, since the reference digests
-// are taken over an encoding computed HERE rather than by the runtime.
-
 /** A `Field` atom: 32 bytes, little-endian, zero-padded, never trimmed. */
 function fieldToKeccakInput(value: bigint): Uint8Array {
     return numberToBytesLE(value, 32);

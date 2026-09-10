@@ -23,13 +23,6 @@ import { runKat } from '@test/crypto';
 // Types whose chunks concatenate to the same bytes must hash identically, so
 // this needs no external oracle -- it compares the three circuits to each other.
 //
-// Every field contributes its FULL declared width, so the equivalence must hold
-// for any byte pattern. Alongside the all-nonzero patterns, two zero-heavy
-// inputs pin that: one with 0x00 at every field boundary (indices 0, 3, 4, 7, 11
-// -- so `Uneven.head` is entirely zero and every `Triple` field ends in zero),
-// and the all-zero value. Under a trailing-zero trim either would break the
-// equivalence, which is what makes them worth including here rather than only in
-// ../trailing_zero.
 const inputs: Uint8Array[] = [
     Uint8Array.from({ length: 12 }, (_unused, i) => i + 1),
     Uint8Array.from({ length: 12 }, (_unused, i) => 0xf0 + i),
