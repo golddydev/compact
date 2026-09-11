@@ -19,12 +19,6 @@ import { pickRandomNode, TERMINAL_GENERATORS, TERMINAL_LIMITS, type TerminalLimi
 import { ENTRY_POINTS, grammar, type FuzzerName, type Terminal } from '../grammar';
 import { Grammar } from '../grammar/types';
 
-/**
- * Expands the grammar into contracts.
- *
- * Every fuzzer shares the one grammar table and the one set of limits; a fuzzer is
- * just an entry nonterminal into that table plus a name for its output files.
- */
 export class Fuzzer {
     private readonly startNode: string;
     private readonly grammar: Grammar;
@@ -46,15 +40,13 @@ export class Fuzzer {
         if (depth > this.MAX_DEPTH) return '';
 
         const alternatives = this.grammar[node];
+        /* Unknown tokens are intentional literals unless they name a terminal. */
         if (!alternatives) {
             const terminal = TERMINAL_GENERATORS[node as Terminal];
-            // an unknown node is emitted as its own name, which is how the grammar
-            // spells the handful of identifiers it means literally
             return terminal ? terminal(this.limits) : node;
         }
 
         const selected = pickRandomNode(alternatives);
-        // a keyword list holds bare strings rather than sequences: nothing to expand
         if (!Array.isArray(selected)) return selected;
         return selected.map((subNode) => this.#generate(subNode, depth + 1)).join('');
     }
@@ -63,7 +55,6 @@ export class Fuzzer {
         return this.#generate(node);
     }
 
-    /** Writes this fuzzer's contracts and returns the paths written. */
     saveContracts(): string[] {
         fs.mkdirSync(this.outputDir, { recursive: true });
 

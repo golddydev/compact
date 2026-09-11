@@ -13,14 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
- * Grammar assembly and health checks.
- *
- * The grammar itself lives in compact.ts. This module only puts the categories
- * together and guards against the ways the table can rot.
- */
-
-import { Alternative, Grammar, Token } from './types';
+import { Grammar, Token } from './types';
 import {
     CATEGORIES,
     ENTRY_POINTS,
@@ -36,16 +29,22 @@ export { CATEGORIES, ENTRY_POINTS, TERMINALS, type Category, type FuzzerName, ty
 
 export const grammar: Grammar = compact;
 
-const categoryOf = (name: string): Category | 'unknown' => {
-    for (const [category, productions] of Object.entries(CATEGORIES)) {
-        if (name in productions) return category as Category;
+type Categories = Record<string, Grammar>;
+
+export interface GrammarSpec {
+    table?: Grammar;
+    categories?: Categories;
+    entryPoints?: Record<string, string>;
+    terminals?: readonly string[];
+}
+
+const categoryOf = (name: string, categories: Categories): string => {
+    for (const [category, productions] of Object.entries(categories)) {
+        if (name in productions) return category;
     }
     return 'unknown';
 };
 
-/**
- * Levenshtein distance, answered only as "within `max`" so the walk can stop early.
- */
 function editDistanceWithin(a: string, b: string, max: number): boolean {
     if (Math.abs(a.length - b.length) > max) return false;
     let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -62,94 +61,82 @@ function editDistanceWithin(a: string, b: string, max: number): boolean {
     return prev[b.length] <= max;
 }
 
-/*
- * Literal identifiers the grammar emits on purpose. Anything else written like a
- * nonterminal but not defined is a reference to a production that never existed or
- * has been removed -- the generator emits an unknown node as literal text, so
- * `valid_type` where `valid_types` was meant silently produces the word instead of
- * a type. That shipped for months.
- */
 const INTENTIONAL_LITERALS = new Set([
-    'var_struct', 'var_counter', 'var_set', 'var_map', 'var_list', 'var_mt', 'var_hmt',
-    'language_version', 'compiler_version', 'path', 'to',
+    'var_struct',
+    'var_counter',
+    'var_set',
+    'var_map',
+    'var_list',
+    'var_mt',
+    'var_hmt',
+    'language_version',
+    'compiler_version',
+    'path',
+    'to',
 ]);
 
-/** Written like a nonterminal: lowercase snake_case with at least one underscore. */
 const looksLikeNonterminal = (token: Token): boolean => /^[a-z][a-z0-9]*(_[a-z0-9]+)+$/.test(token);
 
-/*
- * Entry points that predate the naming convention below. They are reachable only
- * as `ENTRY_POINTS` values, never written inside an alternative, so nothing can
- * emit a literal that collides with them.
- */
 const BARE_NAMES_ALLOWED = new Set(['statements', 'statement']);
 
-/**
- * A production named without an underscore cannot be distinguished from a literal
- * the grammar means to emit, because `looksLikeNonterminal` -- the only thing that
- * decides whether a token is checked at all -- requires one.
- *
- * This is not hypothetical. The ADT productions were once named `kernel`,
- * `counter`, `set`, ...; the `for` grammar emits a literal `counter` referring to
- * the ledger counter it declares. Merging the two into one table silently turned
- * that literal into a nonterminal, and the `for` fuzzer started generating a whole
- * statement inside its loop header. Neither `tsc` nor the checks below could see
- * it. Keeping every production name underscored makes the collision impossible.
- */
-function bareProductionNames(table: Grammar): string[] {
+function bareProductionNames(table: Grammar, categories: Categories): string[] {
     return Object.keys(table)
         .filter((name) => !name.includes('_') && !BARE_NAMES_ALLOWED.has(name))
         .map(
             (name) =>
-                `'${name}' (${categoryOf(name)}) has no underscore, so a literal '${name}' anywhere in the ` +
+                `'${name}' (${categoryOf(name, categories)}) has no underscore, so a literal '${name}' anywhere in the ` +
                 'grammar would silently expand into it instead of being emitted as text',
         );
 }
 
-/**
- * A production defined in two categories: `Object.assign` keeps the last one
- * silently. TypeScript catches a duplicate key *within* one object literal
- * (ts1117); it cannot see a name used in two different categories.
- */
-function crossCategoryCollisions(): string[] {
-    const owner = new Map<string, Category>();
+export function validateCategories(categories: Categories): string[] {
+    const owner = new Map<string, string>();
     const problems: string[] = [];
-    for (const [category, productions] of Object.entries(CATEGORIES)) {
+    for (const [category, productions] of Object.entries(categories)) {
         for (const name of Object.keys(productions)) {
             const previous = owner.get(name);
             if (previous) {
                 problems.push(`'${name}' is defined in both '${previous}' and '${category}'; only the last survives`);
             }
-            owner.set(name, category as Category);
+            owner.set(name, category);
         }
     }
     return problems;
 }
 
-/** Productions no entry point can reach: left behind when a caller was rewritten. */
-function unreachable(table: Grammar): string[] {
-    const reached = new Set<string>();
+function reachable(table: Grammar, entryPoints: Record<string, string>) {
+    const productions = new Set<string>();
+    const tokens = new Set<string>();
     const walk = (node: string): void => {
-        if (reached.has(node) || !(node in table)) return;
-        reached.add(node);
+        if (productions.has(node) || !(node in table)) return;
+        productions.add(node);
         for (const alternative of table[node]) {
             if (!Array.isArray(alternative)) continue;
-            for (const child of alternative as Alternative) walk(child);
+            for (const child of alternative) {
+                tokens.add(child);
+                walk(child);
+            }
         }
     };
-    for (const entry of Object.values(ENTRY_POINTS)) walk(entry);
-    return Object.keys(table).filter((name) => !reached.has(name));
+    for (const entry of Object.values(entryPoints)) walk(entry);
+    return { productions, tokens };
 }
 
-export function validate(table: Grammar = grammar): string[] {
-    const problems: string[] = [...crossCategoryCollisions(), ...bareProductionNames(table)];
-    const defined = new Set<string>([...Object.keys(table), ...TERMINALS]);
+/* Detect failures that otherwise degrade generated coverage silently. */
+export function validate(spec: GrammarSpec = {}): string[] {
+    const table = spec.table ?? grammar;
+    const categories = spec.categories ?? CATEGORIES;
+    const entryPoints = spec.entryPoints ?? ENTRY_POINTS;
+    const terminals = spec.terminals ?? TERMINALS;
+
+    const problems: string[] = [...validateCategories(categories), ...bareProductionNames(table, categories)];
+    const defined = new Set<string>([...Object.keys(table), ...terminals]);
 
     const reported = new Set<string>();
     for (const [name, alternatives] of Object.entries(table)) {
         for (const alternative of alternatives) {
             if (!Array.isArray(alternative)) continue;
-            for (const node of alternative as Alternative) {
+            for (const node of alternative) {
                 if (!looksLikeNonterminal(node) || defined.has(node) || INTENTIONAL_LITERALS.has(node)) continue;
                 const key = `${name}:${node}`;
                 if (reported.has(key)) continue;
@@ -157,15 +144,21 @@ export function validate(table: Grammar = grammar): string[] {
                 const near = [...defined].find((d) => d !== node && editDistanceWithin(node, d, 2));
                 problems.push(
                     near
-                        ? `'${name}' (${categoryOf(name)}) references '${node}', undefined but within two edits of '${near}' -- emitted as literal text`
-                        : `'${name}' (${categoryOf(name)}) references '${node}', which is not defined -- emitted as literal text`,
+                        ? `'${name}' (${categoryOf(name, categories)}) references '${node}', undefined but within two edits of '${near}' -- emitted as literal text`
+                        : `'${name}' (${categoryOf(name, categories)}) references '${node}', which is not defined -- emitted as literal text`,
                 );
             }
         }
     }
 
-    for (const name of unreachable(table)) {
-        problems.push(`'${name}' (${categoryOf(name)}) is unreachable from every entry point`);
+    const { productions, tokens } = reachable(table, entryPoints);
+
+    for (const name of Object.keys(table).filter((name) => !productions.has(name))) {
+        problems.push(`'${name}' (${categoryOf(name, categories)}) is unreachable from every entry point`);
+    }
+
+    for (const terminal of terminals.filter((terminal) => !tokens.has(terminal))) {
+        problems.push(`terminal '${terminal}' is declared and generated but no reachable production references it`);
     }
 
     for (const type of unusedTypes()) {
