@@ -236,60 +236,145 @@ const genericTypes = (v: Token): Alternative[] => [
     ['MerkleTreePath<', v, ',', v, '>'],
 ];
 /*
- * Where a std type writes a size. The `statement_*` family keeps these small and
- * concrete so the contract it lands in still compiles; the `valid_*` family fuzzes
- * them. Everything else about the two lists is identical.
+ * Where a type writes a nested type or a size. The `statement_*` family keeps the
+ * sizes small and concrete so the contract it lands in still compiles; the
+ * `valid_*` family fuzzes them.
  */
-interface TypeSizes {
+interface Slots {
+    /** A nested type that is not a ledger ADT. Every generic slot but one. */
+    plain: Token;
+    /** A nested type of either kind. Only a Map value accepts one. */
+    any: Token;
+    /** The width in `Uint<n>`. The compiler rejects anything above 248. */
     uint: Token;
+    /** The bounds in `Uint<a..b>`. */
     range: Token[];
+    /** The length in `Bytes<n>`. */
     bytes: Token;
-    vector: Token;
+    /** The size in `Vector`, `MerkleTree` and `MerkleTreePath`. */
+    size: Token;
 }
 
 /*
- * The std types Compact offers -- twenty-one shapes that were two hand-maintained
- * copies of each other, differing only in the sizes above and which list they nest.
+ * A ledger ADT, or anything else. That is the only distinction the compiler draws
+ * between types, in compiler/ledger.ss. An ADT parameter written `Type` takes a
+ * plain type; one written `ADT/Type` takes either, and a Map value is the only one.
  */
-const stdTypes = (self: Token, size: TypeSizes): Alternative[] => [
-    ['Boolean'],
-    ['Field'],
-    ['Uint<', size.uint, '>'],
-    ['Uint<', ...size.range, '>'],
-    ['Opaque<"string">'],
-    ['Opaque<"Uint8Array">'],
-    ['Bytes<', size.bytes, '>'],
-    ['Vector<', size.vector, ', ', self, '>'],
-    ['Maybe<', self, '>'],
-    ['Either<', self, ',', self, '>'],
-    ['JubjubPoint'],
-    ['MerkleTreeDigest'],
-    ['MerkleTreePathEntry'],
-    ['MerkleTreePath<', size.vector, ',', self, '>'],
-    ['ContractAddress'],
-    ['ShieldedCoinInfo'],
-    ['QualifiedShieldedCoinInfo'],
-    ['ZswapCoinPublicKey'],
-    ['ShieldedSendResult'],
-    ['UserAddress'],
-    ['[]'],
-];
+type Kind = 'plain' | 'adt';
+
+interface TypeRow {
+    kind: Kind;
+    /** The type as written: a bare name, or a shape that fills some slots. */
+    write: Token | ((s: Slots) => Alternative);
+    /** True for a type that cannot sit inside another ADT. Kernel is the only one. */
+    topLevelOnly?: boolean;
+}
 
 /*
- * The ledger ADTs as types. `element` is what the single-element ADTs nest; Map
- * takes its key and value separately because the two callers do not agree on
- * either -- the statement family writes `Map<std, valid>`, the fuzzing family
- * `Map<valid, std>`.
+ * Every type a Compact program can name, with what the compiler enforces about it.
+ * The productions below are filtered out of this one list, so a new type is one row
+ * and a changed rule is one field.
  */
-const ledgerTypes = (element: Token, mapKey: Token, mapValue: Token, size: Token): Alternative[] => [
-    ['Kernel'],
-    ['Counter'],
-    ['List<', element, '>'],
-    ['Set<', element, '>'],
-    ['Map<', mapKey, ', ', mapValue, '>'],
-    ['MerkleTree<', size, ', ', element, '>'],
-    ['HistoricMerkleTree<', size, ', ', element, '>'],
+const TYPES: TypeRow[] = [
+    /* Built into the parser. compiler/parser.ss holds the whole surface grammar. */
+    { kind: 'plain', write: 'Boolean' },
+    { kind: 'plain', write: 'Field' },
+    { kind: 'plain', write: (s) => ['Uint<', s.uint, '>'] },
+    { kind: 'plain', write: (s) => ['Uint<', ...s.range, '>'] },
+    { kind: 'plain', write: 'Opaque<"string">' },
+    { kind: 'plain', write: 'Opaque<"Uint8Array">' },
+    { kind: 'plain', write: (s) => ['Bytes<', s.bytes, '>'] },
+    { kind: 'plain', write: (s) => ['Vector<', s.size, ', ', s.plain, '>'] },
+    { kind: 'plain', write: '[]' },
+
+    /* Native types, from compiler/midnight-natives.ss. */
+    { kind: 'plain', write: 'JubjubScalar' },
+    { kind: 'plain', write: 'JubjubPoint' },
+
+    /* Exported from compiler/standard-library.compact. */
+    { kind: 'plain', write: (s) => ['Maybe<', s.plain, '>'] },
+    { kind: 'plain', write: (s) => ['Either<', s.plain, ',', s.plain, '>'] },
+    { kind: 'plain', write: 'MerkleTreeDigest' },
+    { kind: 'plain', write: 'MerkleTreePathEntry' },
+    { kind: 'plain', write: (s) => ['MerkleTreePath<', s.size, ',', s.plain, '>'] },
+    { kind: 'plain', write: 'ContractAddress' },
+    { kind: 'plain', write: 'ShieldedCoinInfo' },
+    { kind: 'plain', write: 'QualifiedShieldedCoinInfo' },
+    { kind: 'plain', write: 'ZswapCoinPublicKey' },
+    { kind: 'plain', write: 'ShieldedSendResult' },
+    { kind: 'plain', write: 'UserAddress' },
+    { kind: 'plain', write: 'JubjubSchnorrSignature' },
+
+    /*
+     * The ledger ADTs, from compiler/midnight-ledger.ss. Cell is missing on
+     * purpose: the compiler renames it to __compact_Cell, so no program can
+     * write it.
+     */
+    { kind: 'adt', write: 'Kernel', topLevelOnly: true },
+    { kind: 'adt', write: 'Counter' },
+    { kind: 'adt', write: (s) => ['List<', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['Set<', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['MerkleTree<', s.size, ', ', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['HistoricMerkleTree<', s.size, ', ', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['Map<', s.plain, ', ', s.any, '>'] },
 ];
+
+/** Which rows a production wants. */
+interface Want {
+    kinds: Kind[];
+    /** True where the slot sits inside another ADT, which drops Kernel. */
+    nested?: boolean;
+}
+
+/*
+ * Rows that reached a production. A row nothing selects is a type the fuzzer never
+ * writes, which `validate` reports.
+ */
+const usedTypeRows = new Set<TypeRow>();
+
+const typesFor = (want: Want, slots: Slots): Alternative[] =>
+    TYPES.filter((row) => want.kinds.includes(row.kind))
+        .filter((row) => !(row.topLevelOnly && want.nested))
+        .map((row) => {
+            usedTypeRows.add(row);
+            return typeof row.write === 'string' ? [row.write] : row.write(slots);
+        });
+
+/** Stand-in slots, used only to name a type in an error message. */
+const DESCRIBE_SLOTS: Slots = {
+    plain: 'T',
+    any: 'T',
+    uint: 'N',
+    range: ['N', '..', 'N'],
+    bytes: 'N',
+    size: 'N',
+};
+
+/** Types in the catalogue that no production writes. */
+export const unusedTypes = (): string[] =>
+    TYPES.filter((row) => !usedTypeRows.has(row)).map((row) =>
+        typeof row.write === 'string' ? row.write : row.write(DESCRIBE_SLOTS).join(''),
+    );
+
+/* Sizes fixed and inside the compiler's limits: these types have to compile. */
+const STATEMENT_SLOTS: Slots = {
+    plain: 'statement_std_types',
+    any: 'statement_nested_types',
+    uint: '248',
+    range: ['0', '..', 'small_random_number'],
+    bytes: 'small_random_number',
+    size: '20',
+};
+
+/* The same shapes with every size fuzzed. */
+const FUZZED_SLOTS: Slots = {
+    plain: 'valid_std_types',
+    any: 'valid_nested_types',
+    uint: 'random_number',
+    range: ['random_number', '..', 'random_number'],
+    bytes: 'random_number',
+    size: 'random_number',
+};
 
 /* What an `import`/`prefix` clause will accept where a library name belongs. */
 const libraryName: Alternative[] = identifierPosition([
@@ -320,7 +405,7 @@ const LEDGER_ADT_TYPES: Record<string, Token[]> = {
     kernel: [],
     counter: ['Counter'],
     set: ['Set<', 'statement_std_types', '>'],
-    map: ['Map<', 'statement_std_types', ',', 'statement_valid_types', '>'],
+    map: ['Map<', 'statement_std_types', ',', 'statement_nested_types', '>'],
     list: ['List<', 'statement_std_types', '>'],
     mt: ['MerkleTree<', '20', ',', 'statement_std_types', '>'],
     hmt: ['HistoricMerkleTree<', '20', ',', 'statement_std_types', '>'],
@@ -740,6 +825,8 @@ const types: Grammar = {
         ['random_table'],
     ],
     valid_types: [['valid_std_types'], ['valid_ledger_types']],
+    // the same minus Kernel, which the compiler refuses inside another ADT
+    valid_nested_types: [['valid_std_types'], ['valid_nested_ledger_types']],
     invalid_types: [['invalid_std_types'], ['invalid_ledger_types']],
     // shared by circuit and constructor bodies. An empty ending leaves `return`
     // unterminated before the closing brace, which cannot parse.
@@ -756,21 +843,12 @@ const types: Grammar = {
         ['#A, #B, #C, #D, #E, #F, #G, #H, #I, #J, #K, #L, #M, #N, #O, #U, #P, #Q, #R, #S, #T, #U, #V, #W, #X'],
     ],
     statement_valid_types: [['statement_ledger_types'], ['statement_std_types']],
-    // sizes fixed and small: these types have to compile
-    statement_std_types: stdTypes('statement_std_types', {
-        uint: '254',
-        range: ['0', '..', 'small_random_number'],
-        bytes: 'small_random_number',
-        vector: '20',
-    }),
-    statement_ledger_types: ledgerTypes('statement_std_types', 'statement_std_types', 'statement_valid_types', '20'),
-    // the same shapes with every size fuzzed
-    valid_std_types: stdTypes('valid_std_types', {
-        uint: 'random_number',
-        range: ['random_number', '..', 'random_number'],
-        bytes: 'random_number',
-        vector: 'random_number',
-    }),
+    // the same minus Kernel, which the compiler refuses inside another ADT
+    statement_nested_types: [['statement_nested_ledger_types'], ['statement_std_types']],
+    statement_std_types: typesFor({ kinds: ['plain'] }, STATEMENT_SLOTS),
+    statement_ledger_types: typesFor({ kinds: ['adt'] }, STATEMENT_SLOTS),
+    statement_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true }, STATEMENT_SLOTS),
+    valid_std_types: typesFor({ kinds: ['plain'] }, FUZZED_SLOTS),
     invalid_std_types: [
         ['Uint<', 'random_string', '>'],
         ['Bytes<', 'random_string', '>'],
@@ -786,7 +864,8 @@ const types: Grammar = {
         ['Either<', 'compact_types', ',', 'compact_types', '>'],
         ['MerkleTreePath<', 'random_number', ',', 'compact_types', '>'],
     ],
-    valid_ledger_types: ledgerTypes('valid_std_types', 'valid_types', 'valid_std_types', 'random_number'),
+    valid_ledger_types: typesFor({ kinds: ['adt'] }, FUZZED_SLOTS),
+    valid_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true }, FUZZED_SLOTS),
     invalid_ledger_types: [
         ['Cell<', 'random_number', '>'],
         ['Cell<', 'compact_types', ', ', 'compact_types', '>'],

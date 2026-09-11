@@ -21,7 +21,16 @@
  */
 
 import { Alternative, Grammar, Token } from './types';
-import { CATEGORIES, ENTRY_POINTS, TERMINALS, compact, type Category, type FuzzerName, type Terminal } from './compact';
+import {
+    CATEGORIES,
+    ENTRY_POINTS,
+    TERMINALS,
+    compact,
+    unusedTypes,
+    type Category,
+    type FuzzerName,
+    type Terminal,
+} from './compact';
 
 export { CATEGORIES, ENTRY_POINTS, TERMINALS, type Category, type FuzzerName, type Terminal };
 
@@ -157,6 +166,10 @@ export function validate(table: Grammar = grammar): string[] {
 
     for (const name of unreachable(table)) {
         problems.push(`'${name}' (${categoryOf(name)}) is unreachable from every entry point`);
+    }
+
+    for (const type of unusedTypes()) {
+        problems.push(`the type '${type}' is in the catalogue but no production writes it, so it is never fuzzed`);
     }
 
     return problems;
