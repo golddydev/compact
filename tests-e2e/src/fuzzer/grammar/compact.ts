@@ -26,6 +26,7 @@ import { Alternative, Token, Grammar } from './types';
 export const TERMINALS = [
     'random_version', 'random_string', 'random_number', 'very_small_random_number',
     'small_random_number', 'random_table', 'random_mixed_table',
+    'uint_width', 'uint_bound', 'vector_length', 'bytes_length', 'merkle_depth',
 ] as const;
 
 export type Terminal = (typeof TERMINALS)[number];
@@ -186,14 +187,16 @@ interface Slots {
     plain: Token;
     /** A nested type of either kind. Only a Map value accepts one. */
     any: Token;
-    /** The width in `Uint<n>`. The compiler rejects anything above 248. */
+    /** The width in `Uint<n>`, from 0 to 248. */
     uint: Token;
-    /** The bounds in `Uint<a..b>`. */
+    /** The bounds in `Uint<a..b>`, where a is 0 and b is from 1 to 2^248. */
     range: Token[];
     /** The length in `Bytes<n>`. */
     bytes: Token;
-    /** The size in `Vector`, `MerkleTree` and `MerkleTreePath`. */
-    size: Token;
+    /** The length in `Vector<n, T>` and `MerkleTreePath<n, T>`. */
+    length: Token;
+    /** The depth in `MerkleTree` and `HistoricMerkleTree`, from 2 to 32. */
+    depth: Token;
 }
 
 /*
@@ -203,12 +206,26 @@ interface Slots {
  */
 type Kind = 'plain' | 'adt';
 
+/*
+ * Compiler flags that put extra types in scope, and the flag each one passes. A
+ * backend lives here while it is opt-in. When it ships as the default, delete its
+ * entry: `Feature` then has no members, so every row still tagged with it fails to
+ * compile until the tag is removed, and nothing else in the fuzzer names it.
+ */
+export const FEATURES = {
+    'zkir-v3': '--feature-zkir-v3',
+} as const;
+
+export type Feature = keyof typeof FEATURES;
+
 interface TypeRow {
     kind: Kind;
     /** The type as written: a bare name, or a shape that fills some slots. */
     write: Token | ((s: Slots) => Alternative);
     /** True for a type that cannot sit inside another ADT. Kernel is the only one. */
     topLevelOnly?: boolean;
+    /** A flag the type needs. Without it the name is not in scope at all. */
+    feature?: Feature;
 }
 
 /*
@@ -225,19 +242,23 @@ const TYPES: TypeRow[] = [
     { kind: 'plain', write: 'Opaque<"string">' },
     { kind: 'plain', write: 'Opaque<"Uint8Array">' },
     { kind: 'plain', write: (s) => ['Bytes<', s.bytes, '>'] },
-    { kind: 'plain', write: (s) => ['Vector<', s.size, ', ', s.plain, '>'] },
+    { kind: 'plain', write: (s) => ['Vector<', s.length, ', ', s.plain, '>'] },
     { kind: 'plain', write: '[]' },
 
     /* Native types, from compiler/midnight-natives.ss. */
     { kind: 'plain', write: 'JubjubScalar' },
     { kind: 'plain', write: 'JubjubPoint' },
+    /* Native types from compiler/zkir-v3-natives.ss, which need the flag. */
+    { kind: 'plain', write: 'Secp256k1Base', feature: 'zkir-v3' },
+    { kind: 'plain', write: 'Secp256k1Scalar', feature: 'zkir-v3' },
+    { kind: 'plain', write: 'Secp256k1Point', feature: 'zkir-v3' },
 
     /* Exported from compiler/standard-library.compact. */
     { kind: 'plain', write: (s) => ['Maybe<', s.plain, '>'] },
     { kind: 'plain', write: (s) => ['Either<', s.plain, ',', s.plain, '>'] },
     { kind: 'plain', write: 'MerkleTreeDigest' },
     { kind: 'plain', write: 'MerkleTreePathEntry' },
-    { kind: 'plain', write: (s) => ['MerkleTreePath<', s.size, ',', s.plain, '>'] },
+    { kind: 'plain', write: (s) => ['MerkleTreePath<', s.length, ',', s.plain, '>'] },
     { kind: 'plain', write: 'ContractAddress' },
     { kind: 'plain', write: 'ShieldedCoinInfo' },
     { kind: 'plain', write: 'QualifiedShieldedCoinInfo' },
@@ -245,6 +266,8 @@ const TYPES: TypeRow[] = [
     { kind: 'plain', write: 'ShieldedSendResult' },
     { kind: 'plain', write: 'UserAddress' },
     { kind: 'plain', write: 'JubjubSchnorrSignature' },
+    /* Exported from compiler/zkir-v3-library.compact, which needs the flag. */
+    { kind: 'plain', write: 'Secp256k1EcdsaSignature', feature: 'zkir-v3' },
 
     /*
      * The ledger ADTs, from compiler/midnight-ledger.ss. Cell is missing on
@@ -255,8 +278,8 @@ const TYPES: TypeRow[] = [
     { kind: 'adt', write: 'Counter' },
     { kind: 'adt', write: (s) => ['List<', s.plain, '>'] },
     { kind: 'adt', write: (s) => ['Set<', s.plain, '>'] },
-    { kind: 'adt', write: (s) => ['MerkleTree<', s.size, ', ', s.plain, '>'] },
-    { kind: 'adt', write: (s) => ['HistoricMerkleTree<', s.size, ', ', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['MerkleTree<', s.depth, ', ', s.plain, '>'] },
+    { kind: 'adt', write: (s) => ['HistoricMerkleTree<', s.depth, ', ', s.plain, '>'] },
     { kind: 'adt', write: (s) => ['Map<', s.plain, ', ', s.any, '>'] },
 ];
 
@@ -265,6 +288,8 @@ interface Want {
     kinds: Kind[];
     /** True where the slot sits inside another ADT, which drops Kernel. */
     nested?: boolean;
+    /** The flags the fuzzer using this production compiles with. */
+    features?: Feature[];
 }
 
 /*
@@ -276,6 +301,7 @@ const usedTypeRows = new Set<TypeRow>();
 const typesFor = (want: Want, slots: Slots): Alternative[] =>
     TYPES.filter((row) => want.kinds.includes(row.kind))
         .filter((row) => !(row.topLevelOnly && want.nested))
+        .filter((row) => !row.feature || (want.features ?? []).includes(row.feature))
         .map((row) => {
             usedTypeRows.add(row);
             return typeof row.write === 'string' ? [row.write] : row.write(slots);
@@ -288,7 +314,8 @@ const DESCRIBE_SLOTS: Slots = {
     uint: 'N',
     range: ['N', '..', 'N'],
     bytes: 'N',
-    size: 'N',
+    length: 'N',
+    depth: 'N',
 };
 
 /** Types in the catalogue that no production writes. */
@@ -297,14 +324,15 @@ export const unusedTypes = (): string[] =>
         typeof row.write === 'string' ? row.write : row.write(DESCRIBE_SLOTS).join(''),
     );
 
-/* Sizes fixed and inside the compiler's limits: these types have to compile. */
+/* Sizes that vary but never leave the compiler's limits, because these types have to compile. */
 const STATEMENT_SLOTS: Slots = {
     plain: 'statement_std_types',
     any: 'statement_nested_types',
-    uint: '248',
-    range: ['0', '..', 'small_random_number'],
-    bytes: 'small_random_number',
-    size: '20',
+    uint: 'uint_width',
+    range: ['0', '..', 'uint_bound'],
+    bytes: 'bytes_length',
+    length: 'vector_length',
+    depth: 'merkle_depth',
 };
 
 /* The same shapes with every size fuzzed. */
@@ -314,8 +342,22 @@ const FUZZED_SLOTS: Slots = {
     uint: 'random_number',
     range: ['random_number', '..', 'random_number'],
     bytes: 'random_number',
-    size: 'random_number',
+    length: 'random_number',
+    depth: 'random_number',
 };
+
+/*
+ * The only productions a compiler feature changes. Everything else in the grammar
+ * is the same whichever flags the contract is compiled with.
+ */
+const typeProductions = (features: Feature[]): Grammar => ({
+    statement_std_types: typesFor({ kinds: ['plain'], features }, STATEMENT_SLOTS),
+    statement_ledger_types: typesFor({ kinds: ['adt'], features }, STATEMENT_SLOTS),
+    statement_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true, features }, STATEMENT_SLOTS),
+    valid_std_types: typesFor({ kinds: ['plain'], features }, FUZZED_SLOTS),
+    valid_ledger_types: typesFor({ kinds: ['adt'], features }, FUZZED_SLOTS),
+    valid_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true, features }, FUZZED_SLOTS),
+});
 
 /* What an `import`/`prefix` clause will accept where a library name belongs. */
 const libraryName: Alternative[] = identifierPosition([
@@ -341,8 +383,8 @@ const LEDGER_ADT_TYPES: Record<string, Token[]> = {
     set: ['Set<', 'statement_std_types', '>'],
     map: ['Map<', 'statement_std_types', ',', 'statement_nested_types', '>'],
     list: ['List<', 'statement_std_types', '>'],
-    mt: ['MerkleTree<', '20', ',', 'statement_std_types', '>'],
-    hmt: ['HistoricMerkleTree<', '20', ',', 'statement_std_types', '>'],
+    mt: ['MerkleTree<', 'merkle_depth', ',', 'statement_std_types', '>'],
+    hmt: ['HistoricMerkleTree<', 'merkle_depth', ',', 'statement_std_types', '>'],
 };
 
 const DECLARED_ADTS = Object.entries(LEDGER_ADT_TYPES).filter(([, type]) => type.length > 0);
@@ -715,6 +757,8 @@ const lexical: Grammar = {
  * ================================================================== */
 
 const types: Grammar = {
+    /* The type productions with no feature flags set. `buildGrammar` swaps these. */
+    ...typeProductions([]),
     compact_types: [
         ['valid_types'],
         ['valid_types', ' as ', 'valid_types'],
@@ -749,10 +793,6 @@ const types: Grammar = {
     statement_valid_types: [['statement_ledger_types'], ['statement_std_types']],
     // the same minus Kernel, which the compiler refuses inside another ADT
     statement_nested_types: [['statement_nested_ledger_types'], ['statement_std_types']],
-    statement_std_types: typesFor({ kinds: ['plain'] }, STATEMENT_SLOTS),
-    statement_ledger_types: typesFor({ kinds: ['adt'] }, STATEMENT_SLOTS),
-    statement_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true }, STATEMENT_SLOTS),
-    valid_std_types: typesFor({ kinds: ['plain'] }, FUZZED_SLOTS),
     invalid_std_types: [
         ['Uint<', 'random_string', '>'],
         ['Bytes<', 'random_string', '>'],
@@ -768,8 +808,6 @@ const types: Grammar = {
         ['Either<', 'compact_types', ',', 'compact_types', '>'],
         ['MerkleTreePath<', 'random_number', ',', 'compact_types', '>'],
     ],
-    valid_ledger_types: typesFor({ kinds: ['adt'] }, FUZZED_SLOTS),
-    valid_nested_ledger_types: typesFor({ kinds: ['adt'], nested: true }, FUZZED_SLOTS),
     invalid_ledger_types: [
         ['Cell<', 'random_number', '>'],
         ['Cell<', 'compact_types', ', ', 'compact_types', '>'],
@@ -1307,3 +1345,9 @@ export const CATEGORIES = {
 export type Category = keyof typeof CATEGORIES;
 
 export const compact: Grammar = Object.assign({}, ...Object.values(CATEGORIES)) as Grammar;
+
+/** The grammar as it looks to a compiler run with these feature flags. */
+export const buildGrammar = (features: Feature[]): Grammar => ({
+    ...compact,
+    ...typeProductions(features),
+});

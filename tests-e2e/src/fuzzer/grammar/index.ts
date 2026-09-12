@@ -17,15 +17,28 @@ import { Grammar, Token } from './types';
 import {
     CATEGORIES,
     ENTRY_POINTS,
+    FEATURES,
     TERMINALS,
+    buildGrammar,
     compact,
     unusedTypes,
     type Category,
+    type Feature,
     type FuzzerName,
     type Terminal,
 } from './compact';
 
-export { CATEGORIES, ENTRY_POINTS, TERMINALS, type Category, type FuzzerName, type Terminal };
+export {
+    CATEGORIES,
+    ENTRY_POINTS,
+    FEATURES,
+    TERMINALS,
+    buildGrammar,
+    type Category,
+    type Feature,
+    type FuzzerName,
+    type Terminal,
+};
 
 export const grammar: Grammar = compact;
 
@@ -161,9 +174,15 @@ export function validate(spec: GrammarSpec = {}): string[] {
         problems.push(`terminal '${terminal}' is declared and generated but no reachable production references it`);
     }
 
-    for (const type of unusedTypes()) {
-        problems.push(`the type '${type}' is in the catalogue but no production writes it, so it is never fuzzed`);
-    }
-
     return problems;
+}
+
+/*
+ * Types the catalogue holds that no grammar writes. Only meaningful once every
+ * grammar has been built, since a type may be reachable only under a feature flag.
+ */
+export function validateCatalogue(): string[] {
+    return unusedTypes().map(
+        (type) => `the type '${type}' is in the catalogue but no production writes it, so it is never fuzzed`,
+    );
 }
