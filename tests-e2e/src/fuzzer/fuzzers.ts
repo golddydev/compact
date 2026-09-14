@@ -13,15 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import {
-    ENTRY_POINTS,
-    FEATURES,
-    buildGrammar,
-    validate,
-    validateCatalogue,
-    type Feature,
-    type FuzzerName,
-} from './grammar';
+import { ENTRY_POINTS, FEATURES, buildGrammar, validate, validateCatalogue, type Feature, type FuzzerName } from './grammar';
 import { Fuzzer } from './utils/fuzzer';
 
 /** A generated contract and the compiler flags it has to be compiled with. */
