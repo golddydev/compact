@@ -1242,6 +1242,8 @@ interface StdlibCall {
     name: Token;
     generics: Token[];
     maxArgs: number;
+    /** A flag the call needs. Without it the name is not in scope at all. */
+    feature?: Feature;
 }
 
 const STDLIB_CALLS: StdlibCall[] = [
@@ -1261,6 +1263,14 @@ const STDLIB_CALLS: StdlibCall[] = [
     { name: 'ecAdd', generics: [], maxArgs: 2 },
     { name: 'ecMul', generics: [], maxArgs: 2 },
     { name: 'ecMulGenerator', generics: [], maxArgs: 1 },
+    /* These need --feature-zkir-v3, from compiler/zkir-v3-natives.ss. */
+    { name: 'neg', generics: [], maxArgs: 1, feature: 'zkir-v3' },
+    { name: 'inv', generics: [], maxArgs: 1, feature: 'zkir-v3' },
+    { name: 'secp256k1PointX', generics: [], maxArgs: 1, feature: 'zkir-v3' },
+    { name: 'secp256k1PointY', generics: [], maxArgs: 1, feature: 'zkir-v3' },
+    /* These need --feature-zkir-v3, from compiler/zkir-v3-library.compact. */
+    { name: 'secp256k1EcdsaVerify', generics: [], maxArgs: 3, feature: 'zkir-v3' },
+    { name: 'secp256k1EthereumAddress', generics: [], maxArgs: 1, feature: 'zkir-v3' },
     { name: 'nativeToken', generics: [], maxArgs: 1 },
     { name: 'tokenType', generics: [], maxArgs: 2 },
     { name: 'evolveNonce', generics: [], maxArgs: 2 },
@@ -1297,10 +1307,23 @@ const VALUE_ARGS: Token[] = ['statement_variable', 'statement_methods'];
 const NO_VALUE_ARGS: Token[] = ['random_input', 'statement_std_types', 'no_variable_statement_methods'];
 const BAD_GENERIC_ARGS: Token[] = ['random_input', 'statement_methods'];
 
-const stdlib: Grammar = {
-    statement_methods: [['variable_statement_methods'], ['no_variable_statement_methods']],
+/* Calls that reached a production. A call nothing selects is never fuzzed, which `validate` reports. */
+const usedStdlibCalls = new Set<StdlibCall>();
 
-    variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+/* The calls in scope under these feature flags. */
+const callsFor = (features: Feature[]): StdlibCall[] =>
+    STDLIB_CALLS.filter((c) => !c.feature || features.includes(c.feature)).map((c) => {
+        usedStdlibCalls.add(c);
+        return c;
+    });
+
+/** Calls in the list that no production writes. */
+export const unusedStdlibCalls = (): string[] =>
+    STDLIB_CALLS.filter((c) => !usedStdlibCalls.has(c)).map((c) => c.name);
+
+/* The call productions, which change with the feature flags. */
+const stdlibProductions = (features: Feature[]): Grammar => ({
+    variable_statement_methods: callsFor(features).flatMap((c) => [
         ...arities(c).flatMap((arity) =>
             argLists(arity, VALUE_ARGS).map((args) => call(c.name, c.generics, args)),
         ),
@@ -1313,7 +1336,7 @@ const stdlib: Grammar = {
             : []),
     ]),
 
-    no_variable_statement_methods: STDLIB_CALLS.flatMap((c) => [
+    no_variable_statement_methods: callsFor(features).flatMap((c) => [
         call(c.name, c.generics, []),
         ...arities(c).flatMap((arity) =>
             NO_VALUE_ARGS.map((node) => call(c.name, c.generics, same(node, arity))),
@@ -1327,6 +1350,11 @@ const stdlib: Grammar = {
             ]
             : []),
     ]),
+});
+
+const stdlib: Grammar = {
+    statement_methods: [['variable_statement_methods'], ['no_variable_statement_methods']],
+    ...stdlibProductions([]),
 };
 
 /* ================================================================== */
@@ -1350,4 +1378,5 @@ export const compact: Grammar = Object.assign({}, ...Object.values(CATEGORIES)) 
 export const buildGrammar = (features: Feature[]): Grammar => ({
     ...compact,
     ...typeProductions(features),
+    ...stdlibProductions(features),
 });

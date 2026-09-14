@@ -21,6 +21,7 @@ import {
     TERMINALS,
     buildGrammar,
     compact,
+    unusedStdlibCalls,
     unusedTypes,
     type Category,
     type Feature,
@@ -178,11 +179,16 @@ export function validate(spec: GrammarSpec = {}): string[] {
 }
 
 /*
- * Types the catalogue holds that no grammar writes. Only meaningful once every
- * grammar has been built, since a type may be reachable only under a feature flag.
+ * Types and calls the catalogue holds that no grammar writes. Only meaningful once every
+ * grammar has been built, since some are reachable only under a feature flag.
  */
 export function validateCatalogue(): string[] {
-    return unusedTypes().map(
-        (type) => `the type '${type}' is in the catalogue but no production writes it, so it is never fuzzed`,
-    );
+    return [
+        ...unusedTypes().map(
+            (type) => `the type '${type}' is in the catalogue but no production writes it, so it is never fuzzed`,
+        ),
+        ...unusedStdlibCalls().map(
+            (call) => `the call '${call}' is in STDLIB_CALLS but no production writes it, so it is never fuzzed`,
+        ),
+    ];
 }

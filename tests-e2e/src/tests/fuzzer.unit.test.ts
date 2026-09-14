@@ -16,9 +16,11 @@
 import {
     ENTRY_POINTS,
     TERMINALS,
+    buildGrammar,
     grammar,
     validate,
     validateCategories,
+    type Feature,
     type FuzzerName,
     type Terminal,
 } from '../fuzzer/grammar';
@@ -134,4 +136,22 @@ describe('[UNIT] fuzzer type sizes stay inside the compiler limits', () => {
         });
         expect(illegal).toEqual([]);
     });
+});
+
+/* A call that needs a flag is written only by the grammar built for that flag. */
+describe('[UNIT] fuzzer feature-gated calls', () => {
+    const writes = (features: Feature[], name: string): boolean => {
+        const table = buildGrammar(features);
+        return [...table.variable_statement_methods, ...table.no_variable_statement_methods].some(
+            (alternative) => Array.isArray(alternative) && alternative[0] === name,
+        );
+    };
+
+    test.each(['neg', 'inv', 'secp256k1PointX', 'secp256k1PointY', 'secp256k1EcdsaVerify', 'secp256k1EthereumAddress'])(
+        '%s is written only when zkir-v3 is on',
+        (name) => {
+            expect(writes([], name)).toBe(false);
+            expect(writes(['zkir-v3'], name)).toBe(true);
+        },
+    );
 });
