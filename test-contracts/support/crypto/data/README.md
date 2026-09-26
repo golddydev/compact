@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Vendored crypto test vectors
 
-All three files are copied verbatim from upstream, so they are listed in
+All four files are copied verbatim from upstream, so they are listed in
 `.prettierignore`: reformatting them would change the checksums below.
 
 ## `ecdsa_secp256k1_sha256_bitcoin_test.json`
@@ -38,6 +38,21 @@ SHA-256. Taken from the C2SP fork.
 | License         | Apache-2.0 (Project Wycheproof)                                                              |
 
 Read by [`../wycheproof/ecdsa.ts`](../wycheproof/ecdsa.ts).
+
+## `ed25519_test.json`
+
+Project Wycheproof EdDSA verification vectors for Ed25519 (RFC 8032). Taken
+from the C2SP fork.
+
+| field           | value                                                                         |
+| --------------- | ----------------------------------------------------------------------------- |
+| Source          | https://github.com/C2SP/wycheproof/blob/main/testvectors_v1/ed25519_test.json |
+| Upstream commit | `5722833ca004983abd1a91bcb6c24596d50ac0f9` (2026-08-11)                       |
+| Tests           | 151                                                                           |
+| SHA-256         | `752d2ea7d7c6cf4736381b6cbacb61f8182b126ab7cd9b058f00c50084975536`            |
+| License         | Apache-2.0 (Project Wycheproof)                                               |
+
+Read by [`../wycheproof/eddsa.ts`](../wycheproof/eddsa.ts).
 
 ## `keyaddrtest.json`
 

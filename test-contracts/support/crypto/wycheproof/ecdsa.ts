@@ -40,8 +40,8 @@ import {
 //
 // The circuit takes r, s and a point directly, so each signature and key is
 // decoded here and the message is hashed up front. Vectors the circuit cannot
-// answer are excluded with a reason. EdDSA works differently and needs its own
-// file.
+// answer are excluded with a reason. EdDSA works differently and lives in
+// eddsa.ts.
 
 type EcdsaGroup = {
     type: string;
