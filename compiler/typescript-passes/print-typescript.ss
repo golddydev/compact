@@ -28,6 +28,12 @@
          "convertBytesToUint"
          "convertNumericToJubjubScalar"
          "crossContractCall"
+         "curve25519BaseAdd"
+         "curve25519BaseMul"
+         "curve25519BaseSub"
+         "curve25519ScalarAdd"
+         "curve25519ScalarMul"
+         "curve25519ScalarSub"
          "decodeContractAddress"
          "mulField"
          "secp256k1BaseAdd"
@@ -446,13 +452,14 @@
                                       [(,src ,type ,expr) (make-vmref type (Expr expr (precedence add1 comma) #f))]))
                                   path-elt*)
                              #f
-                             (append (map cons adt-formal* adt-arg*)
-                                     (map (lambda (var-name type expr)
-                                            (let ([sym (id-sym var-name)])
-                                              (cons sym (make-vmref type expr))))
-                                          var-name*
-                                          type*
-                                          expr*))
+                             (cons (cons 'result_type type)
+                               (append (map cons adt-formal* adt-arg*)
+                                       (map (lambda (var-name type expr)
+                                              (let ([sym (id-sym var-name)])
+                                                (cons sym (make-vmref type expr))))
+                                            var-name*
+                                            type*
+                                            expr*)))
                              (vm-code-code vm-code))])
              (vminstr->q-array src vminstr*))]))
 
@@ -1100,35 +1107,26 @@
                   [(tunsigned ,src ,nat)
                    (format "typeof(~a) === 'bigint' && ~:*~a >= 0n && ~:*~a <= ~dn" var nat)]
                   [(tpoint ,src ,ctype)
-                   ;; The tfield case above bounds a bare field element, but an
+                   ;; The tfield case above bounds a bare field element and an
                    ;; unbounded check here would let the same bigint through as
-                   ;; a coordinate, so bound these too - otherwise the
-                   ;; failure surfaces inside CompactTypeSecp256k1Base.toValue,
-                   ;; far from the call site. Curve membership and canonical
-                   ;; identity points are still unchecked.
+                   ;; a coordinate. Points on the other curves - expect JubjubPoint
+                   ;; are checked in full, including curve membership, by one runtime call.
+                   ;; Jubjub coordinates are bounded.
                    (let ([coordinate
                            (lambda (field bound)
                              (format "typeof(~a.~a) === 'bigint' && ~a.~a >= 0n && ~a.~a <= __compactRuntime.~a"
                                var field var field var field bound))])
                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
                        [(curve-curve25519)
-                        (format "~a && ~a"
-                          (coordinate "x" "MAX_CURVE25519_BASE")
-                          (coordinate "y" "MAX_CURVE25519_BASE"))]
+                        (format "__compactRuntime.isValidCurve25519Point(~a)" var)]
                        [(curve-jubjub)
                         (format "~a && ~a"
                           (coordinate "x" "MAX_FIELD")
                           (coordinate "y" "MAX_FIELD"))]
                        [(curve-secp256k1)
-                        (format "~a && ~a && typeof(~a.identity) === 'boolean'"
-                          (coordinate "x" "MAX_SECP256K1_BASE")
-                          (coordinate "y" "MAX_SECP256K1_BASE")
-                          var)]
+                        (format "__compactRuntime.isValidSecp256k1Point(~a)" var)]
                        [(curve-secp256r1)
-                        (format "~a && ~a && typeof(~a.identity) === 'boolean'"
-                          (coordinate "x" "MAX_SECP256R1_BASE")
-                          (coordinate "y" "MAX_SECP256R1_BASE")
-                          var)]))]
+                        (format "__compactRuntime.isValidSecp256r1Point(~a)" var)]))]
                   [(tbytes ,src ,len)
                    (format "~a.buffer instanceof ArrayBuffer && ~:*~a.BYTES_PER_ELEMENT === 1 && ~:*~a.length === ~s" var len)]
                   [(topaque ,src ,opaque-type)
@@ -2508,7 +2506,13 @@
                      type*)]
                   [(tpoint ,src ,ctype)
                    (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                     [(curve-curve25519) (assert not-implemented)]
+                     [(curve-curve25519)
+                      (print-indent indent)
+                      (printf "if (x~s.x != y~:*~s.x || x~:*~s.y != y~:*~s.y) {\n" i)
+                      (print-indent (fx+ indent 2))
+                      (printf "return false;\n")
+                      (print-indent indent)
+                      (printf "}\n")]
                      [(curve-jubjub)
                       (print-indent indent)
                       (printf "if (x~s.x != y~:*~s.x || x~:*~s.y != y~:*~s.y) {\n" i)
@@ -2566,7 +2570,7 @@
              [(tunsigned ,src ,nat) "0n"]
              [(tpoint ,src ,ctype)
               (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                [(curve-curve25519) (assert not-implemented)]  ;; TODO(kmillikin): implement.
+                [(curve-curve25519) "({x: 0n, y: 1n})"]
                 [(curve-jubjub) "({x: 0n, y: 1n})"]
                 [(curve-secp256k1) "({x: 0n, y: 0n, identity: true})"]
                 [(curve-secp256r1) "({x: 0n, y: 0n, identity: true})"])]
@@ -2691,22 +2695,16 @@
     [(+ ,src ,type ,[Expr : expr1 (precedence add1 comma) outer-pure? -> * expr1]
                    ,[Expr : expr2 (precedence add1 comma) outer-pure? -> * expr2])
      (let ([fun (nanopass-case (Ltypescript Type) type
-                  ;; `cannot-happen` below is guaranteed by `infer-types`
+                  ;; `cannot-happen` below is guaranteed by `infer-types`.
                   [(tfield ,src^ ,ftype)
                    (strict-nanopass-case (Ltypescript Field-Type) ftype
                      [(field-native) "addField"]
                      [(field-base ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1BaseAdd"]
-                        [(curve-secp256r1) "secp256r1BaseAdd"])]
-                     [(field-scalar ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1ScalarAdd"]
-                        [(curve-secp256r1) "secp256r1ScalarAdd"])])]
+                      ;; `format-curve-type` is used here and below instead of `format-field-type`
+                      ;; because lowercasing only the first character via `format` is awkward and
+                      ;; we've already dispatched on `ftype` anyway.
+                      (format "~(~a~)BaseAdd" (format-curve-type ctype))]
+                     [(field-scalar ,ctype) (format "~(~a~)ScalarAdd" (format-curve-type ctype))])]
                   [else (assert cannot-happen)])])
        (parenthesize level (precedence call)
          (make-Qconcat
@@ -2722,22 +2720,12 @@
     [(- ,src ,type ,[Expr : expr1 (precedence add1 comma) outer-pure? -> * expr1]
                    ,[Expr : expr2 (precedence add1 comma) outer-pure? -> * expr2])
      (let ([fun (nanopass-case (Ltypescript Type) type
-                  ;; `cannot-happen` below is guaranteed by `infer-types`
+                  ;; `cannot-happen` below is guaranteed by `infer-types`.
                   [(tfield ,src^ ,ftype)
                    (strict-nanopass-case (Ltypescript Field-Type) ftype
                      [(field-native) "subField"]
-                     [(field-base ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1BaseSub"]
-                        [(curve-secp256r1) "secp256r1BaseSub"])]
-                     [(field-scalar ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1ScalarSub"]
-                        [(curve-secp256r1) "secp256r1ScalarSub"])])]
+                     [(field-base ,ctype) (format "~(~a~)BaseSub" (format-curve-type ctype))]
+                     [(field-scalar ,ctype) (format "~(~a~)ScalarSub" (format-curve-type ctype))])]
                   [else (assert cannot-happen)])])
        (parenthesize level (precedence call)
          (make-Qconcat
@@ -2757,18 +2745,8 @@
                   [(tfield ,src^ ,ftype)
                    (strict-nanopass-case (Ltypescript Field-Type) ftype
                      [(field-native) "mulField"]
-                     [(field-base ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1BaseMul"]
-                        [(curve-secp256r1) "secp256r1BaseMul"])]
-                     [(field-scalar ,ctype)
-                      (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                        [(curve-curve25519) (assert not-implemented)]
-                        [(curve-jubjub) (assert cannot-happen)]
-                        [(curve-secp256k1) "secp256k1ScalarMul"]
-                        [(curve-secp256r1) "secp256r1ScalarMul"])])]
+                     [(field-base ,ctype) (format "~(~a~)BaseMul" (format-curve-type ctype))]
+                     [(field-scalar ,ctype) (format "~(~a~)ScalarMul" (format-curve-type ctype))])]
                   [else (assert cannot-happen)])])
        (parenthesize level (precedence call)
          (make-Qconcat
@@ -2996,13 +2974,13 @@
                         (values "convertBytesToUint" (max-field))]
                        [(tfield ,src^ (field-base ,ctype))
                         (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                          [(curve-curve25519) (assert not-implemented)] ;; TODO(kmillikin): implement.
+                          [(curve-curve25519) (values "convertBytesToField" (max-curve25519-base))]
                           [(curve-jubjub) (assert cannot-happen)]
                           [(curve-secp256k1) (values "convertBytesToField" (max-secp256k1-base))]
                           [(curve-secp256r1) (values "convertBytesToField" (max-secp256r1-base))])]
                        [(tfield ,src^ (field-scalar ,ctype))
                         (strict-nanopass-case (Ltypescript Curve-Type) ctype
-                          [(curve-curve25519) (assert not-implemented)] ;; TODO(kmillikin): implement.
+                          [(curve-curve25519) (values "convertBytesToField" (max-curve25519-scalar))]
                           [(curve-jubjub) (values "convertBytesToField" (max-jubjub-scalar))]
                           [(curve-secp256k1) (values "convertBytesToField" (max-secp256k1-scalar))]
                           [(curve-secp256r1) (values "convertBytesToField" (max-secp256r1-scalar))])]

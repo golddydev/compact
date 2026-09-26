@@ -392,9 +392,9 @@
          [else (assert cannot-happen)]))]
     [(= ,test (,var-name1 ,var-name2) (field->bytes ,src ,len ,ftype ,[* primitive-type]))
      (let ()
-       (define (check-length ctype)
+       (define (valid-length? ctype)
          (strict-nanopass-case (Lflattened Curve-Type) ctype
-           [(curve-curve25519) (eqv? len 64)]
+           [(curve-curve25519) (eqv? len 32)]
            [(curve-jubjub) #f]
            [(curve-secp256k1) (eqv? len 32)]
            [(curve-secp256r1) (eqv? len 32)]))
@@ -405,11 +405,11 @@
                  [(field-base ,ctype1)
                   (T primitive-type
                     [(tfield (field-base ,ctype2)) (and (same-curve-type? ctype1 ctype2)
-                                                        (check-length ctype1))])]
+                                                        (valid-length? ctype1))])]
                  [(field-scalar ,ctype1)
                   (T primitive-type
                     [(tfield (field-scalar ,ctype2)) (and (same-curve-type? ctype1 ctype2)
-                                                          (check-length ctype1))])])
+                                                          (valid-length? ctype1))])])
          (type-error (format "argument to field->bytes at ~a" (format-source-object src))
            (with-output-language (Lflattened Primitive-Type) `(tfield ,ftype))
            primitive-type))
@@ -520,15 +520,13 @@
        (source-errorf program-src "expected Field or Uint for bytes-ref, recieved ~a"
          (format-primitive-type primitive-type)))
      (with-output-language (Lflattened Primitive-Type) `(tunsigned 255))]
-    [(bytes->field ,src ,ftype ,len ,[* type1] ,[* type2])
-     (nanopass-case (Lflattened Primitive-Type) type1
-       [(tunsigned ,nat) #t]
-       [else (source-errorf src "unexpected ~a of first argument to bytes->field"
-                            (format-primitive-type type1))])
-     (nanopass-case (Lflattened Primitive-Type) type2
-       [(tunsigned ,nat) #t]
-       [else (source-errorf src "unexpected ~a of second argument to bytes->field"
-                            (format-primitive-type type2))])
+    [(bytes->field ,src ,ftype ,len ,[* type*] ...)
+     (for-each (lambda (type)
+                 (nanopass-case (Lflattened Primitive-Type) type
+                   [(tunsigned ,nat) #t]
+                   [else (source-errorf src "unexpected ~a argument to bytes->field"
+                           (format-primitive-type type))]))
+       type*)
      (with-output-language (Lflattened Primitive-Type) `(tfield ,ftype))]
     [(vector->bytes ,triv ,triv* ...)
      (let ([primitive-type* (map Triv (cons triv triv*))])

@@ -1845,7 +1845,7 @@
        ;; For base and scalar fields, only some casts to/from Bytes are supported.
        (define (valid-length? ctype len)
          (strict-nanopass-case (Ltypes Curve-Type) ctype
-           [(curve-curve25519) (eqv? len 64)]
+           [(curve-curve25519) (eqv? len 32)]
            [(curve-jubjub) #f]
            [(curve-secp256k1) (eqv? len 32)]
            [(curve-secp256r1) (eqv? len 32)]))
@@ -1879,7 +1879,15 @@
                    (and (strict-nanopass-case (Ltypes Field-Type) ftype1
                           [(field-native) #t]
                           [(field-base ,ctype1) (valid-length? ctype1 len2)]
-                          [(field-scalar ,ctype1) (valid-length? ctype1 len2)])
+                          [(field-scalar ,ctype1)
+                           ;;  TODO(kmillikin): we allow casts from `Bytes<64>` to
+                           ;; `Curve25519Scalar` so we have this special case.  Make casting more
+                           ;; systematic so we can remove the special case.
+                           (or (valid-length? ctype1 len2)
+                               (and (nanopass-case (Ltypes Curve-Type) ctype1
+                                      [(curve-curve25519) #t]
+                                      [else #f])
+                                    (eqv? len2 64)))])
                         `(cast-from-bytes ,src ,target-type ,len2 ,expr))]
                   [(tenum ,src2 ,enum-name ,elt-name ,elt-name* ...)
                    `(cast-from-enum ,src ,target-type ,source-type ,expr)]
