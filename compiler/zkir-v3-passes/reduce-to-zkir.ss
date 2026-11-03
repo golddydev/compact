@@ -172,7 +172,16 @@
              (cons `(ec_mul ,(car var-name*) ,(car triv*) ,(cadr triv*)) instr*)]
             [(ecMulGenerator)
              (assert (= (length var-name*) 1))
-             (cons `(ec_mul_generator ,(car var-name*) ,(car triv*)) instr*)]
+             (let ([g (and (eqv? (hashtable-ref constant-ht (car triv*) #f) 1)
+                           (nanopass-case (Lflattened Argument) (car arg*)
+                             [(argument (,var-name ...) (ty (,alignment* ...) ((tfield (field-scalar ,ctype)))))
+                              (let ([enc (generator-encoding ctype)])
+                                (and enc (cons (format "Point<~a>" (curve-type->string ctype)) enc)))]
+                             [else #f]))])
+               ;; loading 1 * G as a constant saves the rows of a scalar multiplication
+               (if g
+                   (cons `(load_constant ,(car g) ,(car var-name*) ,(cdr g) ...) instr*)
+                   (cons `(ec_mul_generator ,(car var-name*) ,(car triv*)) instr*)))]
             [(hashToCurve)
              (assert (= (length var-name*) 1))
              (cons `(hash_to_curve ,(car var-name*) ,triv* ...) instr*)]
@@ -740,7 +749,50 @@
         [(tpoint ,ctype) (format "Point<~a>" (curve-type->string ctype))]
         [(tunsigned ,nat) "Scalar<BLS12-381>"]
         [(topaque ,opaque-type) "Scalar<BLS12-381>"]
-        [else (assert cannot-happen)])))
+        [else (assert cannot-happen)]))
+
+    ;; ==== Constants ====
+    ;; The values of the variables set by load_constant in the current circuit.
+    (define constant-ht)
+
+    ;; The largest value of a foreign field and the bit size of the low limb of its encoding.
+    (define (foreign-field-limits ftype)
+      (strict-nanopass-case (Lflattened Field-Type) ftype
+        [(field-native) (assert cannot-happen)]
+        [(field-base ,ctype)
+         (strict-nanopass-case (Lflattened Curve-Type) ctype
+           [(curve-curve25519) (values (max-curve25519-base) 192)]
+           [(curve-jubjub) (assert cannot-happen)]
+           [(curve-secp256k1) (values (max-secp256k1-base) 192)]
+           [(curve-secp256r1) (values (max-secp256r1-base) 192)])]
+        [(field-scalar ,ctype)
+         (strict-nanopass-case (Lflattened Curve-Type) ctype
+           [(curve-curve25519) (values (max-curve25519-scalar) 204)]
+           [(curve-jubjub) (assert cannot-happen)]
+           [(curve-secp256k1) (values (max-secp256k1-scalar) 192)]
+           [(curve-secp256r1) (values (max-secp256r1-scalar) 192)])]))
+
+    ;; zkir encodes a foreign field value as value - 1 in two limbs, as runtime/src/compact-types.ts does.
+    (define (foreign-field-encoding max low-bits value)
+      (let ([v (if (= value 0) max (- value 1))])
+        (list (bitwise-bit-field v 0 low-bits) (bitwise-arithmetic-shift-right v low-bits))))
+
+    ;; The encoding of a curve's generator, or #f if it is not loaded as a constant.
+    (define (generator-encoding ctype)
+      (define (point-encoding max x y)
+        ;; the last element is the identity flag
+        (append (foreign-field-encoding max 192 x) (foreign-field-encoding max 192 y) '(0)))
+      (strict-nanopass-case (Lflattened Curve-Type) ctype
+        [(curve-curve25519) #f]
+        [(curve-jubjub) #f]
+        [(curve-secp256k1)
+         (point-encoding (max-secp256k1-base)
+           55066263022277343669578718895168534326250603453777594175500187360389116729240
+           32670510020758816978083085130507043184471273380659243275938904335757337482424)]
+        [(curve-secp256r1)
+         (point-encoding (max-secp256r1-base)
+           48439561293906451759052585252797914202762949526041747995844080717082404635286
+           36134250956749795798585127919587881956611106672985015071877198253568414405109)])))
 
   (Program : Program (ir) -> Program ()
     [(program ,src ((,export-name* ,name*) ...) ,pelt* ...)
@@ -773,7 +825,7 @@
      ;; - Insert type constraints for inputs
      ;; - Translate the statements in the body
      ;; - Emit an (output ...) terminator with the result trivs as operands.
-     (fluid-let ([default-src src])
+     (fluid-let ([default-src src] [constant-ht (make-eq-hashtable)])
        (let-values ([(var-name* arg-type*) (unzip-arguments arg*)])
          (let* ([constraint*
                   (fold-left (lambda (constraint* var-name type)
@@ -1014,6 +1066,19 @@
            `(div_mod_power_of_two ,ig1 ,var-name ,quo ,8)
            `(div_mod_power_of_two ,quo ,ig0 ,triv ,(* nat 8))
            instr*)))]
+    [(bytes->field ,src ,ftype ,len ,triv* ...)
+     (guard (not (nanopass-case (Lflattened Field-Type) ftype [(field-native) #t] [else #f]))
+            (not (ormap id? triv*)))
+     ;; from_bytes reduces its input, so the constant is reduced the same way
+     (let-values ([(max low-bits) (foreign-field-limits ftype)])
+       (let ([value (mod (fold-left (lambda (x nat) (+ (bitwise-arithmetic-shift-left x (* 8 (field-bytes))) nat))
+                           0 triv*)
+                         (+ max 1))])
+         (hashtable-set! constant-ht var-name value)
+         (with-output-language (Lzkir Instruction)
+           (cons `(load_constant ,(field-type->string ftype) ,var-name
+                    ,(foreign-field-encoding max low-bits value) ...)
+             instr*))))]
     [(bytes->field ,src ,ftype ,len ,triv* ...)
      (with-output-language (Lzkir Instruction)
        ;; Handle a Bytes<32> field.

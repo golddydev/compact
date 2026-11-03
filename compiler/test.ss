@@ -75880,6 +75880,59 @@ groups than for single tests.
         ))
     )
 
+  ; Issue #881: * or + on a nominal Uint alias was an internal error when the
+  ; result range equaled the alias's range.
+  (test
+    '(
+      "new type Bit = Uint<1>;"
+      "export circuit mul(x: Bit, y: Bit): Bit {"
+      "  return x * y;"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('nominal Uint<1> multiplication', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  expect((await C.circuits.mul(Ctxt, 1n, 1n)).result).toEqual(1n);"
+        "  expect((await C.circuits.mul(Ctxt, 1n, 0n)).result).toEqual(0n);"
+        "  expect((await C.circuits.mul(Ctxt, 0n, 0n)).result).toEqual(0n);"
+        "});"
+        ))
+    )
+
+  (test
+    '(
+      "new type Zero = Uint<0..1>;"
+      "export circuit add(x: Zero, y: Zero): Zero {"
+      "  return x + y;"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('nominal Uint<0..1> addition', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  expect((await C.circuits.add(Ctxt, 0n, 0n)).result).toEqual(0n);"
+        "});"
+        ))
+    )
+
+  (test
+    '(
+      "new type Bit = Uint<0..2>;"
+      "export circuit mul(x: Bit, y: Bit): Bit {"
+      "  return x * y;"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('nominal Uint<0..2> multiplication', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  expect((await C.circuits.mul(Ctxt, 1n, 1n)).result).toEqual(1n);"
+        "  expect((await C.circuits.mul(Ctxt, 0n, 1n)).result).toEqual(0n);"
+        "});"
+        ))
+    )
+
   (test
     `(
       "type Q = Field;"
@@ -77549,6 +77602,212 @@ groups than for single tests.
         ))
     )
 
+  ; issue 867
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "witness getP(): Secp256k1Point;"
+      "export ledger base: Secp256k1Base;"
+      "export ledger scalar: Secp256k1Scalar;"
+      "export ledger x: Secp256k1Base;"
+      "export ledger y: Secp256k1Base;"
+      "export circuit invBase(b: Boolean, v: Secp256k1Base): [] {"
+      "  base = disclose(b ? inv(v) : v);"
+      "}"
+      "export circuit invScalar(b: Boolean, v: Secp256k1Scalar): [] {"
+      "  scalar = disclose(b ? inv(v) : v);"
+      "}"
+      "export circuit witnessCoordinates(b: Boolean): [] {"
+      "  if (disclose(b)) {"
+      "    const p = getP();"
+      "    x = disclose(secp256k1PointX(p));"
+      "    y = disclose(secp256k1PointY(p));"
+      "  }"
+      "}"
+      "export circuit coordinates(p: Secp256k1Point): [] {"
+      "  const [px, py] = p == default<Secp256k1Point>"
+      "      ? [default<Secp256k1Base>, default<Secp256k1Base>]"
+      "      : [secp256k1PointX(p), secp256k1PointY(p)];"
+      "  x = disclose(px);"
+      "  y = disclose(py);"
+      "}"
+      )
+    (stage-javascript
+      `(
+        "test('Secp256k1 inv and coordinates in a branch that is not taken', async () => {"
+        "  const G = runtime.secp256k1MulGenerator(1n);"
+        "  const identity = runtime.secp256k1MulGenerator(0n);"
+        "  const witnesses = { getP: ({privateState}: any): [number, any] => [privateState, G] };"
+        "  const [C, Ctxt] = await startContract(contractCode, witnesses, 0);"
+        "  const L = (r: any) => contractCode.ledger(r.context.callContext.currentQueryContext.state);"
+        "  const xy = (r: any) => [L(r).x, L(r).y];"
+        "  expect(L(await C.circuits.invBase(Ctxt, false, 0n)).base).toEqual(0n);"
+        "  expect(L(await C.circuits.invScalar(Ctxt, false, 0n)).scalar).toEqual(0n);"
+        ,(format "  expect(L(await C.circuits.invBase(Ctxt, true, 2n)).base).toEqual(~dn);"
+           (quotient (+ (max-secp256k1-base) 2) 2))
+        ,(format "  expect(L(await C.circuits.invScalar(Ctxt, true, 2n)).scalar).toEqual(~dn);"
+           (quotient (+ (max-secp256k1-scalar) 2) 2))
+        "  await expect(C.circuits.invBase(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "  await expect(C.circuits.invScalar(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "  // When getP is not called, ZKIR sees the identity in its place."
+        "  expect(xy(await C.circuits.witnessCoordinates(Ctxt, false))).toEqual([0n, 0n]);"
+        "  expect(xy(await C.circuits.witnessCoordinates(Ctxt, true))).toEqual([G.x, G.y]);"
+        "  expect(xy(await C.circuits.coordinates(Ctxt, identity))).toEqual([0n, 0n]);"
+        "  expect(xy(await C.circuits.coordinates(Ctxt, G))).toEqual([G.x, G.y]);"
+        "});"
+        ))
+    )
+
+  ; issue 867
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "witness getP(): Secp256r1Point;"
+      "export ledger base: Secp256r1Base;"
+      "export ledger scalar: Secp256r1Scalar;"
+      "export ledger x: Secp256r1Base;"
+      "export ledger y: Secp256r1Base;"
+      "export circuit invBase(b: Boolean, v: Secp256r1Base): [] {"
+      "  base = disclose(b ? inv(v) : v);"
+      "}"
+      "export circuit invScalar(b: Boolean, v: Secp256r1Scalar): [] {"
+      "  scalar = disclose(b ? inv(v) : v);"
+      "}"
+      "export circuit witnessCoordinates(b: Boolean): [] {"
+      "  if (disclose(b)) {"
+      "    const p = getP();"
+      "    x = disclose(secp256r1PointX(p));"
+      "    y = disclose(secp256r1PointY(p));"
+      "  }"
+      "}"
+      "export circuit coordinates(p: Secp256r1Point): [] {"
+      "  const [px, py] = p == default<Secp256r1Point>"
+      "      ? [default<Secp256r1Base>, default<Secp256r1Base>]"
+      "      : [secp256r1PointX(p), secp256r1PointY(p)];"
+      "  x = disclose(px);"
+      "  y = disclose(py);"
+      "}"
+      )
+    (stage-javascript
+      `(
+        "test('Secp256r1 inv and coordinates in a branch that is not taken', async () => {"
+        "  const G = runtime.secp256r1MulGenerator(1n);"
+        "  const identity = runtime.secp256r1MulGenerator(0n);"
+        "  const witnesses = { getP: ({privateState}: any): [number, any] => [privateState, G] };"
+        "  const [C, Ctxt] = await startContract(contractCode, witnesses, 0);"
+        "  const L = (r: any) => contractCode.ledger(r.context.callContext.currentQueryContext.state);"
+        "  const xy = (r: any) => [L(r).x, L(r).y];"
+        "  expect(L(await C.circuits.invBase(Ctxt, false, 0n)).base).toEqual(0n);"
+        "  expect(L(await C.circuits.invScalar(Ctxt, false, 0n)).scalar).toEqual(0n);"
+        ,(format "  expect(L(await C.circuits.invBase(Ctxt, true, 2n)).base).toEqual(~dn);"
+           (quotient (+ (max-secp256r1-base) 2) 2))
+        ,(format "  expect(L(await C.circuits.invScalar(Ctxt, true, 2n)).scalar).toEqual(~dn);"
+           (quotient (+ (max-secp256r1-scalar) 2) 2))
+        "  await expect(C.circuits.invBase(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "  await expect(C.circuits.invScalar(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "  // When getP is not called, ZKIR sees the identity in its place."
+        "  expect(xy(await C.circuits.witnessCoordinates(Ctxt, false))).toEqual([0n, 0n]);"
+        "  expect(xy(await C.circuits.witnessCoordinates(Ctxt, true))).toEqual([G.x, G.y]);"
+        "  expect(xy(await C.circuits.coordinates(Ctxt, identity))).toEqual([0n, 0n]);"
+        "  expect(xy(await C.circuits.coordinates(Ctxt, G))).toEqual([G.x, G.y]);"
+        "});"
+        ))
+    )
+
+  ; issue 867
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger base: Curve25519Base;"
+      "export ledger scalar: Curve25519Scalar;"
+      "export circuit invBase(b: Boolean, v: Curve25519Base): [] {"
+      "  base = disclose(b ? inv(v) : v);"
+      "}"
+      "export circuit invScalar(b: Boolean, v: Curve25519Scalar): [] {"
+      "  scalar = disclose(b ? inv(v) : v);"
+      "}"
+      )
+    (stage-javascript
+      `(
+        "test('Curve25519 inv in a branch that is not taken', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  const L = (r: any) => contractCode.ledger(r.context.callContext.currentQueryContext.state);"
+        "  expect(L(await C.circuits.invBase(Ctxt, false, 0n)).base).toEqual(0n);"
+        "  expect(L(await C.circuits.invScalar(Ctxt, false, 0n)).scalar).toEqual(0n);"
+        ,(format "  expect(L(await C.circuits.invBase(Ctxt, true, 2n)).base).toEqual(~dn);"
+           (quotient (+ (max-curve25519-base) 2) 2))
+        ,(format "  expect(L(await C.circuits.invScalar(Ctxt, true, 2n)).scalar).toEqual(~dn);"
+           (quotient (+ (max-curve25519-scalar) 2) 2))
+        "  await expect(C.circuits.invBase(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "  await expect(C.circuits.invScalar(Ctxt, true, 0n)).rejects.toThrow(runtime.CompactError);"
+        "});"
+        ))
+    )
+
+  ; issue 867
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger ok: Boolean;"
+      "export circuit verify(b: Boolean, d: Bytes<32>,"
+      "                      sig: Secp256k1EcdsaSignature, pk: Secp256k1Point): [] {"
+      "  if (disclose(b)) {"
+      "    ok = disclose(secp256k1EcdsaVerify(d, sig, pk));"
+      "  }"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('secp256k1EcdsaVerify in a branch that is not taken', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  const ok = (r: any) => contractCode.ledger(r.context.callContext.currentQueryContext.state).ok;"
+        "  const d = new Uint8Array(32).fill(0xab);"
+        "  const SK = 7n;"
+        "  const parsed = secp256k1.Signature.fromBytes("
+        "    secp256k1.sign(d, secp256k1.Point.Fn.toBytes(SK), { prehash: false }));"
+        "  const sig = { r: parsed.r, s: parsed.s };"
+        "  const pk = runtime.secp256k1MulGenerator(SK);"
+        "  const identity = runtime.secp256k1MulGenerator(0n);"
+        "  expect(ok(await C.circuits.verify(Ctxt, false, d, { r: 0n, s: 0n }, identity))).toEqual(false);"
+        "  expect(ok(await C.circuits.verify(Ctxt, true, d, sig, pk))).toEqual(true);"
+        "  expect(ok(await C.circuits.verify(Ctxt, true, d, sig, runtime.secp256k1MulGenerator(SK + 1n)))).toEqual(false);"
+        "  await expect(C.circuits.verify(Ctxt, true, d, { r: 0n, s: 0n }, pk)).rejects.toThrow(runtime.CompactError);"
+        "});"
+        ))
+    )
+
+  ; issue 867
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger ok: Boolean;"
+      "export circuit verify(b: Boolean, d: Bytes<32>,"
+      "                      sig: Secp256r1EcdsaSignature, pk: Secp256r1Point): [] {"
+      "  if (disclose(b)) {"
+      "    ok = disclose(secp256r1EcdsaVerify(d, sig, pk));"
+      "  }"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('secp256r1EcdsaVerify in a branch that is not taken', async () => {"
+        "  const [C, Ctxt] = await startContract(contractCode, {}, 0);"
+        "  const ok = (r: any) => contractCode.ledger(r.context.callContext.currentQueryContext.state).ok;"
+        "  const d = new Uint8Array(32).fill(0xab);"
+        "  const SK = 7n;"
+        "  const parsed = p256.Signature.fromBytes("
+        "    p256.sign(d, p256.Point.Fn.toBytes(SK), { prehash: false }));"
+        "  const sig = { r: parsed.r, s: parsed.s };"
+        "  const pk = runtime.secp256r1MulGenerator(SK);"
+        "  const identity = runtime.secp256r1MulGenerator(0n);"
+        "  expect(ok(await C.circuits.verify(Ctxt, false, d, { r: 0n, s: 0n }, identity))).toEqual(false);"
+        "  expect(ok(await C.circuits.verify(Ctxt, true, d, sig, pk))).toEqual(true);"
+        "  expect(ok(await C.circuits.verify(Ctxt, true, d, sig, runtime.secp256r1MulGenerator(SK + 1n)))).toEqual(false);"
+        "  await expect(C.circuits.verify(Ctxt, true, d, { r: 0n, s: 0n }, pk)).rejects.toThrow(runtime.CompactError);"
+        "});"
+        ))
+    )
+
   (let ([v (+ (expt 2 248) 5)] [wide (+ (max-curve25519-scalar) 6)])
     (test
       `(
@@ -77557,8 +77816,8 @@ groups than for single tests.
         "export ledger k1s: Secp256k1Scalar;"
         "export ledger r1b: Secp256r1Base;"
         "export ledger r1s: Secp256r1Scalar;"
-        "export ledger c25b: Curve25519Base;"
-        "export ledger c25s: Curve25519Scalar;"
+        "export ledger c25519b: Curve25519Base;"
+        "export ledger c25519s: Curve25519Scalar;"
         "export ledger f: Field;"
         "export circuit castK1(b: Boolean, x: Secp256k1Base, y: Secp256k1Scalar): [] {"
         ,(format "  k1b = disclose(b ? x : (~d as Field as Bytes<32>) as Secp256k1Base);" v)
@@ -77568,22 +77827,21 @@ groups than for single tests.
         ,(format "  r1b = disclose(b ? x : (~d as Field as Bytes<32>) as Secp256r1Base);" v)
         ,(format "  r1s = disclose(b ? y : (~d as Field as Bytes<32>) as Secp256r1Scalar);" v)
         "}"
-        "export circuit castC25(b: Boolean, x: Curve25519Base, y: Curve25519Scalar): [] {"
-        ,(format "  c25b = disclose(b ? x : (~d as Field as Bytes<32>) as Curve25519Base);" v)
-        ,(format "  c25s = disclose(b ? y : (~d as Field as Bytes<32>) as Curve25519Scalar);" v)
+        "export circuit castC25519(b: Boolean, x: Curve25519Base, y: Curve25519Scalar): [] {"
+        ,(format "  c25519b = disclose(b ? x : (~d as Field as Bytes<32>) as Curve25519Base);" v)
+        ,(format "  c25519s = disclose(b ? y : (~d as Field as Bytes<32>) as Curve25519Scalar);" v)
         "}"
         "export circuit castZero(): [] {"
         "  k1b = disclose((0 as Field as Bytes<32>) as Secp256k1Base);"
         "  k1s = disclose((0 as Field as Bytes<32>) as Secp256k1Scalar);"
         "  r1b = disclose((0 as Field as Bytes<32>) as Secp256r1Base);"
         "  r1s = disclose((0 as Field as Bytes<32>) as Secp256r1Scalar);"
-        "  c25b = disclose((0 as Field as Bytes<32>) as Curve25519Base);"
-        "  c25s = disclose((0 as Field as Bytes<32>) as Curve25519Scalar);"
+        "  c25519b = disclose((0 as Field as Bytes<32>) as Curve25519Base);"
+        "  c25519s = disclose((0 as Field as Bytes<32>) as Curve25519Scalar);"
         "}"
         "export circuit castWide(): [] {"
-        ,(format "  c25s = disclose((~d as Field as Bytes<32>) as Curve25519Scalar);" wide)
+        ,(format "  c25519s = disclose((~d as Field as Bytes<32>) as Curve25519Scalar);" wide)
         "}"
-        "// The condition is always true, but only optimize-circuit can tell, so it folds the cast."
         "export circuit castNative(v: Bytes<32>, x: Uint<8>, y: Uint<8>): [] {"
         ,(format "  const k = (x < y) == (x < y) ? (~d as Field as Bytes<32>) : v;" v)
         "  f = disclose(k as Field);"
@@ -77603,14 +77861,13 @@ groups than for single tests.
           "  expect([l.r1b, l.r1s]).toEqual([V, V]);"
           "  l = L(await C.circuits.castR1(Ctxt, true, 7n, 8n));"
           "  expect([l.r1b, l.r1s]).toEqual([7n, 8n]);"
-          "  l = L(await C.circuits.castC25(Ctxt, false, 7n, 8n));"
-          "  expect([l.c25b, l.c25s]).toEqual([V, V]);"
-          "  l = L(await C.circuits.castC25(Ctxt, true, 7n, 8n));"
-          "  expect([l.c25b, l.c25s]).toEqual([7n, 8n]);"
+          "  l = L(await C.circuits.castC25519(Ctxt, false, 7n, 8n));"
+          "  expect([l.c25519b, l.c25519s]).toEqual([V, V]);"
+          "  l = L(await C.circuits.castC25519(Ctxt, true, 7n, 8n));"
+          "  expect([l.c25519b, l.c25519s]).toEqual([7n, 8n]);"
           "  l = L(await C.circuits.castZero(Ctxt));"
-          "  expect([l.k1b, l.k1s, l.r1b, l.r1s, l.c25b, l.c25s]).toEqual([0n, 0n, 0n, 0n, 0n, 0n]);"
-          "  // A cast reduces modulo the group order."
-          "  expect(L(await C.circuits.castWide(Ctxt)).c25s).toEqual(5n);"
+          "  expect([l.k1b, l.k1s, l.r1b, l.r1s, l.c25519b, l.c25519s]).toEqual([0n, 0n, 0n, 0n, 0n, 0n]);"
+          "  expect(L(await C.circuits.castWide(Ctxt)).c25519s).toEqual(5n);"
           "  expect(L(await C.circuits.castNative(Ctxt, new Uint8Array(32), 1n, 2n)).f).toEqual(V);"
           "});"
           ))
@@ -81778,6 +82035,50 @@ groups than for single tests.
         )))
     )
 
+  ; Issue #866: x - x on a foreign field was folded to a Uint<0..1> constant.
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger k1: Secp256k1Scalar;"
+      "export ledger r1: Secp256r1Base;"
+      "export ledger c: Curve25519Scalar;"
+      "circuit diff(a: Secp256k1Scalar, b: Secp256k1Scalar): Secp256k1Scalar {"
+      "  return a - b;"
+      "}"
+      "export circuit selfSub(k: Secp256k1Scalar): Secp256k1Scalar {"
+      "  k1 = disclose(k - k);"
+      "  return k1;"
+      "}"
+      "export circuit inlinedSelfSub(k: Secp256k1Scalar): Secp256k1Scalar {"
+      "  k1 = disclose(diff(k, k));"
+      "  return k1;"
+      "}"
+      "export circuit mulSelfSub(k: Secp256k1Scalar, z: Secp256k1Scalar): Secp256k1Scalar {"
+      "  k1 = disclose(k * (z - z));"
+      "  return k1;"
+      "}"
+      "export circuit selfSubR1(k: Secp256r1Base): Secp256r1Base {"
+      "  r1 = disclose(k - k);"
+      "  return r1;"
+      "}"
+      "export circuit selfSubC(k: Curve25519Scalar): Curve25519Scalar {"
+      "  c = disclose(k - k);"
+      "  return c;"
+      "}"
+      )
+    (stage-javascript
+      '(
+        "test('foreign field self-subtraction', async () => {"
+        "  const [contract, context] = await startContract(contractCode, {}, 0);"
+        "  expect((await contract.circuits.selfSub(context, 12345n)).result).toEqual(0n);"
+        "  expect((await contract.circuits.inlinedSelfSub(context, 12345n)).result).toEqual(0n);"
+        "  expect((await contract.circuits.mulSelfSub(context, 12345n, 678n)).result).toEqual(0n);"
+        "  expect((await contract.circuits.selfSubR1(context, 12345n)).result).toEqual(0n);"
+        "  expect((await contract.circuits.selfSubC(context, 12345n)).result).toEqual(0n);"
+        "  });"
+        ))
+    )
+
 
   (test
     '(
@@ -84118,6 +84419,98 @@ groups than for single tests.
         "  expect(l.eb).toEqual({ is_left: true, left: 9n, right: 0n });"
         "  });"
         ))
+    )
+
+  ; Issue #880: casting a foreign field type to Uint was an internal error.
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export circuit foo(a: Curve25519Base): Uint<64> {"
+      "  return a as Uint<64>;"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 3 char 10" "cannot cast from type ~a to type ~a" ("Curve25519Base" "Uint<64>")))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "new type S = Secp256k1Scalar;"
+      "export circuit foo(a: S): Uint<8> {"
+      "  return a as Uint<8>;"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 4 char 10" "cannot cast from type ~a to type ~a" ("Secp256k1Scalar" "Uint<8>")))
+    )
+
+  ; Casting a non-native field type to an enum was also an internal error.
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "enum E { x, y }"
+      "export circuit foo(a: JubjubScalar): E {"
+      "  return a as E;"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 4 char 10" "cannot cast from type ~a to type ~a" ("JubjubScalar" "Enum<E, x, y>")))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "enum E { x, y }"
+      "export circuit foo(a: Curve25519Base): E {"
+      "  return a as E;"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 4 char 10" "cannot cast from type ~a to type ~a" ("Curve25519Base" "Enum<E, x, y>")))
+    )
+
+  ; Casting any field type other than Field to Boolean is a type error.
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export circuit foo(a: Secp256r1Base): Boolean {"
+      "  return a as Boolean;"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 3 char 10" "cannot cast from type ~a to type ~a" ("Secp256r1Base" "Boolean")))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger b: Boolean;"
+      "export circuit foo(a: Curve25519Scalar): [] {"
+      "  b = disclose(a as Boolean);"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 4 char 16" "cannot cast from type ~a to type ~a" ("Curve25519Scalar" "Boolean")))
+    )
+
+  (test
+    '(
+      "import CompactStandardLibrary;"
+      "export ledger b: Boolean;"
+      "export circuit foo(a: JubjubScalar): [] {"
+      "  b = disclose(a as Boolean);"
+      "}"
+      )
+    (oops
+      message: "~a:\n  ~?"
+      irritants: '("testfile.compact line 4 char 16" "cannot cast from type ~a to type ~a" ("JubjubScalar" "Boolean")))
     )
 
   (test

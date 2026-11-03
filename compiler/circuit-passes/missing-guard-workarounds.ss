@@ -46,10 +46,80 @@
           (with-output-language (Lflattened Statement)
             (with-temp-ids src (t)
               (cons `(= 1 ,t (select ,test ,triv 0))
-                    (k t)))))))
+                    (k t))))))
+    ; natives whose zkir code fails on 0 or the identity even when test is false
+    (define native-ht)
+    (define (record-native! pelt)
+      (nanopass-case (Lflattened Program-Element) pelt
+        [(native ,src ,function-name ,native-entry (,arg* ...) ,type)
+         (when (memq (id-sym function-name)
+                 '(inv secp256k1PointX secp256k1PointY secp256r1PointX secp256r1PointY))
+           (nanopass-case (Lflattened Argument) (car arg*)
+             [(argument (,var-name* ...) (ty (,alignment* ...) (,primitive-type* ...)))
+              (hashtable-set! native-ht function-name (car primitive-type*))]))]
+        [else (void)]))
+    (define (field-one src ftype)
+      (with-output-language (Lflattened Statement)
+        ; zkir constants are native field values, so build 1 from its Bytes<32> limbs
+        (with-temp-ids src (one)
+          (values one (list `(= 1 ,one (bytes->field ,src ,ftype 32 0 1)))))))
+    (define (curve-info ctype)
+      (strict-nanopass-case (Lflattened Curve-Type) ctype
+        [(curve-curve25519) (assert cannot-happen)]
+        [(curve-jubjub) (assert cannot-happen)]
+        [(curve-secp256k1)
+         (values 'secp256k1 "__compactRuntime.secp256k1MulGenerator"
+           "Secp256k1Scalar" "Secp256k1Point")]
+        [(curve-secp256r1)
+         (values 'secp256r1 "__compactRuntime.secp256r1MulGenerator"
+           "Secp256r1Scalar" "Secp256r1Point")]))
+    ; the program might not declare an ecMulGenerator native, so make one per curve
+    (define generator-ht)
+    (define generator-ndecl*)
+    (define (generator-native src ctype)
+      (let-values ([(curve runtime-name scalar-name point-name) (curve-info ctype)])
+        (or (hashtable-ref generator-ht curve #f)
+            (let ([fn (make-temp-id src 'ecMulGenerator)])
+              (set! generator-ndecl*
+                (cons
+                  (with-output-language (Lflattened Native-Declaration)
+                    `(native ,src ,fn ,(make-native-entry runtime-name 'circuit '(#f) '(#f #f))
+                       ((argument (,(make-temp-id src 'b))
+                                  (ty ((anative ,scalar-name)) ((tfield (field-scalar ,ctype))))))
+                       (ty ((anative ,point-name)) ((tpoint ,ctype)))))
+                  generator-ndecl*))
+              (hashtable-set! generator-ht curve fn)
+              fn))))
+    ; reuse the generator within a circuit, since optimize-circuit does not merge calls
+    (define generator-var-ht)
+    (define (generator-point src ctype)
+      (let-values ([(curve . ignore) (curve-info ctype)])
+        (let ([g (hashtable-ref generator-var-ht curve #f)])
+          (if g
+              (values g '())
+              (with-output-language (Lflattened Statement)
+                (with-temp-ids src (one g)
+                  (hashtable-set! generator-var-ht curve g)
+                  (values g
+                    (list
+                      `(= 1 ,one (bytes->field ,src (field-scalar ,ctype) 32 0 1))
+                      `(= 1 (,g) (call ,src ,(generator-native src ctype) ,one)))))))))))
+  (Program : Program (ir) -> Program ()
+    [(program ,src ((,export-name* ,name*) ...) ,pelt* ...)
+     (fluid-let ([native-ht (make-eq-hashtable)]
+                 [generator-ht (make-eq-hashtable)]
+                 [generator-ndecl* '()])
+       (for-each record-native! pelt*)
+       (let ([pelt* (map (lambda (pelt)
+                           (nanopass-case (Lflattened Program-Element) pelt
+                             [(circuit ,src ,function-name (,arg* ...) ,type ,stmt* ... (,triv* ...))
+                              (Circuit-Definition pelt)]
+                             [else pelt]))
+                         pelt*)])
+         `(program ,src ((,export-name* ,name*) ...) ,generator-ndecl* ... ,pelt* ...)))])
   (Circuit-Definition : Circuit-Definition (ir) -> Circuit-Definition ()
     [(circuit ,src ,function-name (,arg* ...) ,type ,stmt* ... (,triv* ...))
-     (fluid-let ([def-ht (make-eq-hashtable)])
+     (fluid-let ([def-ht (make-eq-hashtable)] [generator-var-ht (make-eq-hashtable)])
        (for-each
          (lambda (arg)
            (nanopass-case (Lflattened Argument) arg
@@ -94,6 +164,19 @@
                `(= 1 ,var-name1 (cast-from-field ,src #t 0
                                   ,(with-output-language (Lflattened Field-Type) `(field-native))
                                   ,q))))))]
+    [(= ,test (,var-name* ...) (call ,src ,function-name ,triv* ...))
+     (guard (not (eqv? test 1)) (hashtable-contains? native-ht function-name))
+     ;; when test is false, pass 1 to inv and the generator to the point accessors
+     (with-output-language (Lflattened Statement)
+       (let-values ([(safe stmt*)
+                     (nanopass-case (Lflattened Primitive-Type) (hashtable-ref native-ht function-name #f)
+                       [(tfield ,ftype) (field-one src ftype)]
+                       [(tpoint ,ctype) (generator-point src ctype)])])
+         (with-temp-ids src (t)
+           (append stmt*
+             (list
+               `(= 1 ,t (select ,test ,(car triv*) ,safe))
+               `(= ,test (,var-name* ...) (call ,src ,function-name ,t)))))))]
     [(= ,test (,var-name* ...) ,multiple)
      (when (eqv? test 1) (for-each defined! var-name*))
      (list ir)]
